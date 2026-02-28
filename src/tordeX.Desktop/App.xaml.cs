@@ -16,6 +16,9 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Delete leftover .old.exe from a previous auto-update
+        AutoUpdateService.CleanupOldExecutable();
+
         var services = new ServiceCollection();
         ConfigureServices(services);
         _serviceProvider = services.BuildServiceProvider();
@@ -31,6 +34,9 @@ public partial class App : Application
 
         // Core chat service (singleton — owns crypto, storage, network)
         services.AddSingleton(new ChatService(dataDir));
+
+        // Auto-update service (singleton — checks GitHub releases)
+        services.AddSingleton<AutoUpdateService>();
 
         // WPF + Blazor services
         services.AddWpfBlazorWebView();

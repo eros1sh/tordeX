@@ -1,6 +1,53 @@
 @using TordeX.Core.Models
 @using TordeX.Core.Services
 @inject ChatService Chat
+@inject AutoUpdateService Updater
+
+<!-- Update Banner -->
+@if (Updater.UpdateAvailable && !Updater.UpdateDismissed)
+{
+    <div class="update-banner">
+        <div class="update-banner-content">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" class="update-icon">
+                <path d="M9 2v8M9 10l-3-3M9 10l3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M3 13v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <div class="update-info">
+                <span class="update-title">@L("UpdateAvailable")</span>
+                <span class="update-versions">
+                    <span class="update-version-old">@L("CurrentVersionLabel") @AutoUpdateService.CurrentVersion</span>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="vertical-align: middle;">
+                        <path d="M4 6h4M6.5 4l2 2-2 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span class="update-version-new">@L("NewVersionLabel") @Updater.LatestVersion</span>
+                </span>
+            </div>
+            @if (Updater.IsDownloading)
+            {
+                <div class="update-progress-wrapper">
+                    <div class="update-progress-bar">
+                        <div class="update-progress-fill" style="width: @GetDownloadPercent()%"></div>
+                    </div>
+                    <span class="update-progress-text">@FormatBytes(Updater.DownloadedBytes) / @FormatBytes(Updater.DownloadTotalBytes)</span>
+                </div>
+            }
+            else if (Updater.ErrorMessage is not null)
+            {
+                <span class="update-error">@Updater.ErrorMessage</span>
+                <button class="btn-update" @onclick="DownloadUpdate">@L("UpdateNow")</button>
+            }
+            else
+            {
+                <button class="btn-update" @onclick="DownloadUpdate">@L("UpdateNow")</button>
+            }
+        </div>
+        <button class="update-dismiss" @onclick="() => Updater.UpdateDismissed = true" title="@L("Close")">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+        </button>
+    </div>
+}
 
 <div class="app-layout">
     <!-- Sidebar -->
@@ -268,14 +315,25 @@
             <div class="modal-title">@L("JoinRoom")</div>
 
             <div class="form-group">
-                <label class="form-label">@L("RoomId")</label>
-                <input type="text" class="form-input" placeholder="@L("PasteRoomId")"
-                       @bind="_joinRoomId" @bind:event="oninput" />
+                <label class="form-label">@L("RoomIdOrInvite")</label>
+                <input type="text" class="form-input" placeholder="@L("PasteRoomIdOrInvite")"
+                       value="@_joinInput"
+                       @oninput="OnJoinInputChanged" />
+                @if (_inviteLinkDetected)
+                {
+                    <div class="invite-detected-badge">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                            <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/>
+                            <path d="M4 6l1.5 1.5L8 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        @L("InviteLinkDetected")
+                    </div>
+                }
             </div>
 
             <div class="form-group">
-                <label class="form-label">@L("RoomName")</label>
-                <input type="text" class="form-input" placeholder="@L("RoomDisplayName")"
+                <label class="form-label">@L("RoomNameOptional")</label>
+                <input type="text" class="form-input" placeholder="@L("RoomNameOptionalPlaceholder")"
                        @bind="_joinRoomName" @bind:event="oninput" />
             </div>
 
@@ -823,9 +881,12 @@
     private string _newRoomPassword = string.Empty;
     private string _newRoomDescription = string.Empty;
     private int _newRoomCapacity;
+    private string _joinInput = string.Empty;
     private string _joinRoomId = string.Empty;
     private string _joinRoomName = string.Empty;
     private string _joinRoomPassword = string.Empty;
+    private string _joinInviteToken = string.Empty;
+    private bool _inviteLinkDetected;
     private string _unlockPassword = string.Empty;
     private ChatRoom? _unlockRoomTarget;
     private ChatRoom? _deleteRoomTarget;
@@ -903,11 +964,17 @@
         // Set language
         LocalizationService.CurrentLanguage = _settingsLanguage;
 
+        // Listen for auto-update state changes
+        Updater.OnStateChanged += OnUpdaterStateChanged;
+
         // Auto-connect to Tor in background
         if (!Chat.IsTorConnected)
         {
             _ = AutoConnectTorAsync();
         }
+
+        // Check for updates in background
+        _ = Updater.CheckForUpdateAsync();
     }
 
     private async Task AutoConnectTorAsync()
@@ -1060,9 +1127,12 @@
         CloseDialogs();
         _showJoinRoom = true;
         _dialogError = string.Empty;
+        _joinInput = string.Empty;
         _joinRoomId = string.Empty;
         _joinRoomName = string.Empty;
         _joinRoomPassword = string.Empty;
+        _joinInviteToken = string.Empty;
+        _inviteLinkDetected = false;
     }
 
     private void CloseDialogs()
@@ -1131,7 +1201,15 @@
     {
         _dialogError = string.Empty;
 
-        if (string.IsNullOrWhiteSpace(_joinRoomId))
+        // Parse smart input: invite link or plain room ID
+        var roomId = _joinRoomId;
+        if (!_inviteLinkDetected)
+        {
+            // User typed plain text — treat as room ID directly
+            roomId = _joinInput.Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(roomId))
         {
             _dialogError = "Room ID is required.";
             return;
@@ -1148,11 +1226,11 @@
 
         try
         {
-            var saltInput = System.Text.Encoding.UTF8.GetBytes($"tordeX-room-salt-v1:{_joinRoomId}");
+            var saltInput = System.Text.Encoding.UTF8.GetBytes($"tordeX-room-salt-v1:{roomId}");
             var roomSalt = System.Security.Cryptography.SHA256.HashData(saltInput);
 
-            var name = string.IsNullOrWhiteSpace(_joinRoomName) ? "Room " + _joinRoomId[..8] : _joinRoomName;
-            var room = await Chat.JoinRoomAsync(_joinRoomId, name, _joinRoomPassword, roomSalt);
+            var name = string.IsNullOrWhiteSpace(_joinRoomName) ? "Room " + roomId[..Math.Min(8, roomId.Length)] : _joinRoomName;
+            var room = await Chat.JoinRoomAsync(roomId, name, _joinRoomPassword, roomSalt);
             _rooms.Insert(0, room);
             _roomPasswords[room.Id] = _joinRoomPassword;
             ActivateRoom(room, _joinRoomPassword);
@@ -1384,6 +1462,65 @@
     private void LockApp()
     {
         Chat.LockApp();
+    }
+
+    // ──────── Auto-Update ────────
+
+    private async void OnUpdaterStateChanged()
+    {
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task DownloadUpdate()
+    {
+        var shouldExit = await Updater.DownloadAndApplyUpdateAsync();
+        if (shouldExit)
+        {
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                System.Windows.Application.Current.Shutdown();
+            });
+        }
+    }
+
+    private int GetDownloadPercent()
+    {
+        if (Updater.DownloadTotalBytes <= 0) return 0;
+        return (int)(Updater.DownloadedBytes * 100 / Updater.DownloadTotalBytes);
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+    // ──────── Join Room (Smart Input) ────────
+
+    private void OnJoinInputChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? string.Empty;
+        _joinInput = value;
+
+        const string prefix = "tordex://join/";
+        if (value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var remainder = value[prefix.Length..];
+            var parts = remainder.Split('/', 2, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 1)
+            {
+                _joinRoomId = parts[0];
+                _joinInviteToken = parts.Length >= 2 ? parts[1] : string.Empty;
+                _inviteLinkDetected = true;
+                return;
+            }
+        }
+
+        // Not an invite link — treat as plain room ID
+        _inviteLinkDetected = false;
+        _joinRoomId = string.Empty;
+        _joinInviteToken = string.Empty;
     }
 
     // ──────── Panic Wipe ────────

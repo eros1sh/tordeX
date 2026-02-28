@@ -263,6 +263,23 @@ public static class LocalizationService
         ["DataProtection"] = "Data Protection",
         ["ThreatMonitoring"] = "Threat Monitoring",
         ["Advanced"] = "Advanced",
+
+        // ──────────────── Auto-Update ────────────────
+        ["UpdateAvailable"] = "Update Available",
+        ["UpdateVersion"] = "Version {0} is available",
+        ["UpdateNow"] = "Update Now",
+        ["Downloading"] = "Downloading...",
+        ["UpdateCancelled"] = "Update cancelled.",
+        ["UpdateFailed"] = "Update failed",
+        ["CurrentVersionLabel"] = "Current",
+        ["NewVersionLabel"] = "New",
+
+        // ──────────────── Join Room (Improved) ────────────────
+        ["RoomIdOrInvite"] = "Room ID or Invite Link",
+        ["PasteRoomIdOrInvite"] = "Paste room ID or tordex://join/... link",
+        ["InviteLinkDetected"] = "Invite link detected",
+        ["RoomNameOptional"] = "Room Name (optional)",
+        ["RoomNameOptionalPlaceholder"] = "Display name for this room",
     }.ToFrozenDictionary(StringComparer.Ordinal);
 
     private static readonly FrozenDictionary<string, string> TrStrings = new Dictionary<string, string>
@@ -518,6 +535,23 @@ public static class LocalizationService
         ["DataProtection"] = "Veri Koruma",
         ["ThreatMonitoring"] = "Tehdit İzleme",
         ["Advanced"] = "Gelişmiş",
+
+        // ──────────────── Otomatik Güncelleme ────────────────
+        ["UpdateAvailable"] = "Güncelleme Mevcut",
+        ["UpdateVersion"] = "Sürüm {0} mevcut",
+        ["UpdateNow"] = "Şimdi Güncelle",
+        ["Downloading"] = "İndiriliyor...",
+        ["UpdateCancelled"] = "Güncelleme iptal edildi.",
+        ["UpdateFailed"] = "Güncelleme başarısız",
+        ["CurrentVersionLabel"] = "Mevcut",
+        ["NewVersionLabel"] = "Yeni",
+
+        // ──────────────── Odaya Katıl (Gelişmiş) ────────────────
+        ["RoomIdOrInvite"] = "Oda Kimliği veya Davet Bağlantısı",
+        ["PasteRoomIdOrInvite"] = "Oda kimliği veya tordex://join/... bağlantısı yapıştırın",
+        ["InviteLinkDetected"] = "Davet bağlantısı algılandı",
+        ["RoomNameOptional"] = "Oda Adı (isteğe bağlı)",
+        ["RoomNameOptionalPlaceholder"] = "Bu oda için görünen ad",
     }.ToFrozenDictionary(StringComparer.Ordinal);
 
     private static readonly FrozenDictionary<string, FrozenDictionary<string, string>> Languages =
