@@ -34,7 +34,7 @@ public partial class MainWindow : Window
             new RootComponent
             {
                 Selector = "#app",
-                ComponentType = typeof(Pages.Main)
+                ComponentType = typeof(TordeX.UI.Pages.Main)
             });
 
         _chatService.OnNotification += ShowNotification;

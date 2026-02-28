@@ -15,19 +15,8 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        include:
-          - os: windows-latest
-            rid: win-x64
-            archive_ext: zip
-          - os: ubuntu-latest
-            rid: linux-x64
-            archive_ext: tar.gz
-
-    runs-on: ${{ matrix.os }}
-
+  build-windows:
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,13 +27,13 @@ jobs:
           dotnet-version: '9.0.x'
 
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore src/tordeX.Desktop/tordeX.Desktop.csproj
 
       - name: Build
-        run: dotnet build -c Release --no-restore
+        run: dotnet build src/tordeX.Desktop/tordeX.Desktop.csproj -c Release --no-restore
 
       - name: Test
-        run: dotnet test src/tordeX.Tests/tordeX.Tests.csproj -c Release --no-build --verbosity normal
+        run: dotnet test src/tordeX.Tests/tordeX.Tests.csproj -c Release --verbosity normal
 
       - name: Get version
         id: version
@@ -64,22 +53,71 @@ jobs:
           dotnet publish src/tordeX.Desktop/tordeX.Desktop.csproj \
             -c Release \
             --self-contained \
-            -r ${{ matrix.rid }} \
+            -r win-x64 \
             -p:PublishSingleFile=true \
             -p:IncludeNativeLibrariesForSelfExtract=true \
             -p:EnableCompressionInSingleFile=true \
             -p:Version=${{ steps.version.outputs.name }} \
             -o publish
 
-      - name: Create ZIP archive (Windows)
-        if: matrix.rid == 'win-x64'
+      - name: Create ZIP archive
         shell: pwsh
         run: |
           $zipName = "tordeX-${{ steps.version.outputs.name }}-win-x64.zip"
           Compress-Archive -Path "publish\*" -DestinationPath $zipName -Force
 
-      - name: Create tar.gz archive (Linux)
-        if: matrix.rid == 'linux-x64'
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tordeX-win-x64
+          path: tordeX-*.zip
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore
+        run: dotnet restore src/tordeX.Linux/tordeX.Linux.csproj
+
+      - name: Build
+        run: dotnet build src/tordeX.Linux/tordeX.Linux.csproj -c Release --no-restore
+
+      - name: Test
+        run: dotnet test src/tordeX.Tests/tordeX.Tests.csproj -c Release --verbosity normal
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=v${{ inputs.version }}" >> $GITHUB_OUTPUT
+            echo "name=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "name=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish (Self-Contained Single File)
+        shell: bash
+        run: |
+          dotnet publish src/tordeX.Linux/tordeX.Linux.csproj \
+            -c Release \
+            --self-contained \
+            -r linux-x64 \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:EnableCompressionInSingleFile=true \
+            -p:Version=${{ steps.version.outputs.name }} \
+            -o publish
+
+      - name: Create tar.gz archive
         shell: bash
         run: |
           tar -czf "tordeX-${{ steps.version.outputs.name }}-linux-x64.tar.gz" -C publish .
@@ -87,13 +125,11 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: tordeX-${{ matrix.rid }}
-          path: |
-            tordeX-*.zip
-            tordeX-*.tar.gz
+          name: tordeX-linux-x64
+          path: tordeX-*.tar.gz
 
   release:
-    needs: build
+    needs: [build-windows, build-linux]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -144,12 +180,14 @@ jobs:
             2. Extract: `tar -xzf tordeX-*.tar.gz`
             3. Make executable: `chmod +x tordeX`
             4. Run: `./tordeX`
-
-            > **Note:** Linux build requires a WebView2-compatible runtime. See project README for details.
+            5. Tor binaries are downloaded automatically on first launch
 
             ### Requirements
             - **Windows:** Windows 10 (build 19041) or later, WebView2 Runtime
-            - **Linux:** .NET 9 compatible distribution
+            - **Linux:** WebKitGTK (`libwebkit2gtk-4.0` or `libwebkit2gtk-4.1`) — install via:
+              - Ubuntu/Debian: `sudo apt install libwebkit2gtk-4.1-dev`
+              - Fedora: `sudo dnf install webkit2gtk4.1-devel`
+              - Arch: `sudo pacman -S webkit2gtk-4.1`
 
             ### Security
             - 32 security/privacy features enabled

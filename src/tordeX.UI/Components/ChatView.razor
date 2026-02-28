@@ -48,7 +48,7 @@
         {
             <span class="text-[11px] text-[var(--text-muted)]">@Room.Description</span>
         }
-        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-[var(--radius-sm)] bg-[rgba(46,204,113,0.1)] text-[var(--success)] text-[11px] font-medium">
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-[var(--radius-sm)] bg-success-subtle text-[var(--success)] text-[11px] font-medium">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
@@ -143,7 +143,7 @@
                             @if (msg.ReplyToContent is not null)
                             {
                                 <div class="flex items-stretch mb-1.5 rounded-[var(--radius-sm)] overflow-hidden bg-[var(--bg-hover)]">
-                                    <div class="w-[3px] bg-[var(--accent)] shrink-0"></div>
+                                    <div class="quote-bar bg-[var(--accent)] shrink-0"></div>
                                     <div class="px-2 py-1.5 min-w-0">
                                         <p class="text-[11px] font-semibold text-[var(--accent-light)] truncate">@(msg.ReplyToSenderName ?? "Unknown")</p>
                                         <p class="text-[11px] text-[var(--text-muted)] truncate">@TruncateText(msg.ReplyToContent, 80)</p>
@@ -200,7 +200,7 @@
                                     }
                                     else
                                     {
-                                        <div class="flex items-center gap-2.5 p-2 rounded-[var(--radius-sm)] bg-[rgba(0,0,0,0.2)] cursor-pointer" @onclick="() => LoadImagePreview(msg)">
+                                        <div class="flex items-center gap-2.5 p-2 rounded-[var(--radius-sm)] cursor-pointer" @onclick="() => LoadImagePreview(msg)">
                                             <span class="text-[20px]">📷</span>
                                             <div class="flex-1 min-w-0">
                                                 <p class="text-[12px] font-semibold truncate">@(msg.FileName ?? "Image")</p>
@@ -213,13 +213,13 @@
                             else if (msg.Type == MessageType.Video)
                             {
                                 <div class="@(msg.IsOwn ? "px-3.5 py-2 rounded-[var(--radius-lg)] rounded-br-[var(--radius-sm)] bg-[var(--accent-dark)] text-[#fff]" : "px-3.5 py-2 rounded-[var(--radius-lg)] rounded-bl-[var(--radius-sm)] bg-[var(--bg-tertiary)] text-[var(--text-primary)]")">
-                                    <div class="flex items-center gap-2.5 p-2 rounded-[var(--radius-sm)] bg-[rgba(0,0,0,0.2)]">
+                                    <div class="flex items-center gap-2.5 p-2 rounded-[var(--radius-sm)]">
                                         <span class="text-[20px]">🎬</span>
                                         <div class="flex-1 min-w-0">
                                             <p class="text-[12px] font-semibold truncate">@(msg.FileName ?? "Video")</p>
                                             <div class="flex items-center gap-2 mt-0.5">
                                                 <span class="text-[10px] opacity-70">@FormatFileSize(msg.FileSize ?? 0)</span>
-                                                <span class="text-[10px] px-1.5 py-0.5 rounded-[var(--radius-sm)] bg-[rgba(46,204,113,0.15)] text-[var(--success)]">Encrypted</span>
+                                                <span class="text-[10px] px-1.5 py-0.5 rounded-[var(--radius-sm)] bg-success-subtle-15 text-[var(--success)]">Encrypted</span>
                                             </div>
                                         </div>
                                     </div>
@@ -257,7 +257,7 @@
                             else if (msg.Type == MessageType.File)
                             {
                                 <div class="@(msg.IsOwn ? "px-3.5 py-2 rounded-[var(--radius-lg)] rounded-br-[var(--radius-sm)] bg-[var(--accent-dark)] text-[#fff]" : "px-3.5 py-2 rounded-[var(--radius-lg)] rounded-bl-[var(--radius-sm)] bg-[var(--bg-tertiary)] text-[var(--text-primary)]")">
-                                    <div class="flex items-center gap-2.5 p-2 rounded-[var(--radius-sm)] bg-[rgba(0,0,0,0.2)]">
+                                    <div class="flex items-center gap-2.5 p-2 rounded-[var(--radius-sm)]">
                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="@(msg.IsOwn ? "#fff" : "var(--text-secondary)")" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                                             <polyline points="14 2 14 8 20 8"/>
@@ -266,7 +266,7 @@
                                             <p class="text-[12px] font-semibold truncate">@(msg.FileName ?? "File")</p>
                                             <div class="flex items-center gap-2 mt-0.5">
                                                 <span class="text-[10px] opacity-70">@FormatFileSize(msg.FileSize ?? 0)</span>
-                                                <span class="text-[10px] px-1.5 py-0.5 rounded-[var(--radius-sm)] bg-[rgba(46,204,113,0.15)] text-[var(--success)]">Encrypted</span>
+                                                <span class="text-[10px] px-1.5 py-0.5 rounded-[var(--radius-sm)] bg-success-subtle-15 text-[var(--success)]">Encrypted</span>
                                             </div>
                                         </div>
                                     </div>
@@ -397,11 +397,9 @@
 <!-- Forward Dialog -->
 @if (_showForwardDialog)
 {
-    <div class="fixed inset-0 z-[1000] flex items-center justify-center" @onclick="() => _showForwardDialog = false">
-        <div class="absolute inset-0 bg-[rgba(0,0,0,0.7)]"></div>
-        <div class="relative w-full max-w-[420px] rounded-[var(--radius-lg)] bg-[var(--bg-secondary)] border border-[var(--border)] p-6"
-             style="box-shadow: var(--shadow-lg); animation: slideUp 250ms ease;"
-             @onclick:stopPropagation="true">
+    <div class="modal-overlay" @onclick="() => _showForwardDialog = false">
+        <div class="modal-backdrop"></div>
+        <div class="modal-card" @onclick:stopPropagation="true">
             <h3 class="text-[16px] font-semibold text-[var(--text-primary)] mb-4">Forward Message</h3>
             <p class="text-[12px] text-[var(--text-muted)] mb-3">Select a room to forward to:</p>
             @foreach (var room in _allRooms.Where(r => r.Id != Room.Id))
@@ -423,7 +421,7 @@
     @if (_replyingTo is not null)
     {
         <div class="flex items-stretch px-4 pt-3">
-            <div class="w-[3px] rounded-full bg-[var(--accent)] shrink-0"></div>
+            <div class="quote-bar rounded-full bg-[var(--accent)] shrink-0"></div>
             <div class="flex-1 flex items-center justify-between px-3 py-2 rounded-r-[var(--radius-sm)] bg-[var(--bg-tertiary)]">
                 <div class="min-w-0">
                     <p class="text-[11px] font-semibold text-[var(--accent-light)]">Replying to @_replyingTo.SenderDisplayName</p>
@@ -443,7 +441,7 @@
     @if (_editingMessage is not null)
     {
         <div class="flex items-stretch px-4 pt-3">
-            <div class="w-[3px] rounded-full bg-[var(--warning)] shrink-0"></div>
+            <div class="quote-bar rounded-full bg-[var(--warning)] shrink-0"></div>
             <div class="flex-1 flex items-center justify-between px-3 py-2 rounded-r-[var(--radius-sm)] bg-[var(--bg-tertiary)]">
                 <div class="min-w-0">
                     <p class="text-[11px] font-semibold text-[var(--warning)]">Editing message</p>
@@ -485,7 +483,7 @@
     <!-- Self-destruct toggle -->
     @if (_selfDestructEnabled)
     {
-        <div class="flex items-center gap-3 mx-4 mt-2 px-3 py-2 rounded-[var(--radius-sm)] bg-[rgba(243,156,18,0.1)] border border-[rgba(243,156,18,0.3)]">
+        <div class="flex items-center gap-3 mx-4 mt-2 px-3 py-2 rounded-[var(--radius-sm)] bg-warning-subtle border border-warning-subtle">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"/>
                 <polyline points="12 6 12 12 16 14"/>
@@ -590,8 +588,8 @@
 @* ── Bookmarks Panel ── *@
 @if (_showBookmarks)
 {
-    <div class="fixed top-0 right-0 w-[340px] h-full z-[900] bg-[var(--bg-secondary)] border-l border-[var(--border)] flex flex-col"
-         style="box-shadow: var(--shadow-lg); animation: slideInRight 250ms ease;">
+    <div class="fixed top-0 right-0 h-full bg-[var(--bg-secondary)] border-l border-[var(--border)] flex flex-col"
+         style="width: 340px; z-index: 900; box-shadow: var(--shadow-lg); animation: slideInRight 250ms ease;">
         <!-- Header -->
         <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
             <h3 class="text-[15px] font-semibold text-[var(--text-primary)]">@L("Bookmarks")</h3>
@@ -631,11 +629,9 @@
 <!-- Room Info Dialog -->
 @if (_showRoomInfo)
 {
-    <div class="fixed inset-0 z-[1000] flex items-center justify-center" @onclick="() => _showRoomInfo = false">
-        <div class="absolute inset-0 bg-[rgba(0,0,0,0.7)]"></div>
-        <div class="relative w-full max-w-[420px] rounded-[var(--radius-lg)] bg-[var(--bg-secondary)] border border-[var(--border)] p-6"
-             style="box-shadow: var(--shadow-lg); animation: slideUp 250ms ease;"
-             @onclick:stopPropagation="true">
+    <div class="modal-overlay" @onclick="() => _showRoomInfo = false">
+        <div class="modal-backdrop"></div>
+        <div class="modal-card" @onclick:stopPropagation="true">
             <h3 class="text-[16px] font-semibold text-[var(--text-primary)] mb-4">Room Information</h3>
 
             <div class="flex flex-col gap-4">
@@ -675,7 +671,7 @@
 
                 <div class="flex flex-col gap-1">
                     <label class="text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Encryption</label>
-                    <span class="inline-flex w-fit items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-sm)] bg-[rgba(46,204,113,0.1)] text-[var(--success)] text-[12px]">
+                    <span class="inline-flex w-fit items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-sm)] bg-success-subtle text-[var(--success)] text-[12px]">
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                             <path d="M7 11V7a5 5 0 0 1 10 0v4"/>

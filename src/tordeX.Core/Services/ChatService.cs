@@ -16,6 +16,7 @@ namespace TordeX.Core.Services;
 public sealed class ChatService : IAsyncDisposable
 {
     private readonly string _dataDirectory;
+    private readonly AppLogger _logger;
     private SecureDatabase? _database;
     private TorManager? _torManager;
     private P2PServer? _p2pServer;
@@ -54,9 +55,10 @@ public sealed class ChatService : IAsyncDisposable
     public event Action<string, string>? OnTypingIndicator; // roomId, senderName
     #pragma warning restore CS0067
 
-    public ChatService(string dataDirectory)
+    public ChatService(string dataDirectory, AppLogger? logger = null)
     {
         _dataDirectory = dataDirectory;
+        _logger = logger ?? new AppLogger(dataDirectory);
         Directory.CreateDirectory(dataDirectory);
     }
 
@@ -83,7 +85,7 @@ public sealed class ChatService : IAsyncDisposable
         await SaveSaltAsync(passwordSalt, ct);
 
         var dbPath = Path.Combine(_dataDirectory, "tordeX.db");
-        _database = new SecureDatabase(dbPath);
+        _database = new SecureDatabase(dbPath, _logger);
         await _database.InitializeAsync(_masterKey, ct);
 
         _userProfile = new UserProfile
@@ -131,7 +133,7 @@ public sealed class ChatService : IAsyncDisposable
 
         try
         {
-            _database = new SecureDatabase(dbPath);
+            _database = new SecureDatabase(dbPath, _logger);
             await _database.InitializeAsync(_masterKey, ct);
 
             _userProfile = await _database.GetUserProfileAsync(ct);
@@ -218,7 +220,7 @@ public sealed class ChatService : IAsyncDisposable
         CryptographicOperations.ZeroMemory(_masterKey!);
         _masterKey = newMasterKey;
 
-        _database = new SecureDatabase(Path.Combine(_dataDirectory, "tordeX.db"));
+        _database = new SecureDatabase(Path.Combine(_dataDirectory, "tordeX.db"), _logger);
         await _database.InitializeAsync(_masterKey, ct);
 
         _userProfile = updatedProfile;
@@ -316,7 +318,7 @@ public sealed class ChatService : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Hidden service creation failed: {ex.Message}");
+            _logger.Error("Hidden service creation failed", ex, "TorSetup");
         }
     }
 
@@ -357,7 +359,7 @@ public sealed class ChatService : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Peer connection failed: {ex.Message}");
+            _logger.Error("Peer connection failed", ex, "P2P");
             await peer.DisposeAsync();
         }
     }
@@ -398,8 +400,9 @@ public sealed class ChatService : IAsyncDisposable
 
                 OnPeerStatusChanged?.Invoke(peer.PeerFingerprint, true);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.Error("Incoming peer handling failed", ex, "P2P");
                 try { await peer.DisposeAsync(); } catch { /* best effort */ }
             }
         });
@@ -467,7 +470,7 @@ public sealed class ChatService : IAsyncDisposable
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"P2P message handling failed: {ex.Message}");
+                _logger.Error("P2P message handling failed", ex, "P2P");
             }
         });
     }
@@ -1156,5 +1159,8 @@ public sealed class ChatService : IAsyncDisposable
 
         if (_masterKey is not null)
             CryptographicOperations.ZeroMemory(_masterKey);
+
+        _logger.Info("ChatService disposed — graceful shutdown", "App");
+        _logger.Dispose();
     }
 }

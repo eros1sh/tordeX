@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using TordeX.Core.Cryptography;
+using TordeX.Core.Services;
 
 namespace TordeX.Core.Storage;
 
@@ -11,14 +12,16 @@ public sealed class SecureDatabase : IAsyncDisposable
 {
     private SqliteConnection? _connection;
     private readonly string _dbPath;
+    private readonly AppLogger? _logger;
     private bool _disposed;
 
     private static bool _providerInitialized;
     private static readonly object _initLock = new();
 
-    public SecureDatabase(string dbPath)
+    public SecureDatabase(string dbPath, AppLogger? logger = null)
     {
         _dbPath = dbPath;
+        _logger = logger;
 
         lock (_initLock)
         {
@@ -435,7 +438,15 @@ public sealed class SecureDatabase : IAsyncDisposable
         cmd.Parameters.AddWithValue("@maxCap", room.MaxCapacity);
         cmd.Parameters.AddWithValue("@invite", (object?)room.InviteToken ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@onion", (object?)room.OnionAddress ?? DBNull.Value);
-        await cmd.ExecuteNonQueryAsync(ct);
+        try
+        {
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqliteException ex)
+        {
+            _logger?.DbError("SaveRoom", ex, $"room_id={room.Id}, name={room.Name}");
+            throw;
+        }
     }
 
     public async Task<List<Models.ChatRoom>> GetRoomsAsync(CancellationToken ct = default)
@@ -531,14 +542,29 @@ public sealed class SecureDatabase : IAsyncDisposable
         cmd.Parameters.AddWithValue("@voiceDuration", (object?)message.VoiceDuration ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@isViewOnce", message.IsViewOnce ? 1 : 0);
         cmd.Parameters.AddWithValue("@viewedAt", message.ViewedAt.HasValue ? message.ViewedAt.Value.ToString("O") : DBNull.Value);
-        await cmd.ExecuteNonQueryAsync(ct);
+        try
+        {
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqliteException ex)
+        {
+            _logger?.DbError("SaveMessage/INSERT", ex, $"room_id={roomId}, msg_id={message.Id}");
+            throw;
+        }
 
         // Update room activity
         await using var updateCmd = _connection!.CreateCommand();
         updateCmd.CommandText = "UPDATE rooms SET last_activity_at = @time WHERE id = @room";
         updateCmd.Parameters.AddWithValue("@time", DateTimeOffset.UtcNow.ToString("O"));
         updateCmd.Parameters.AddWithValue("@room", roomId);
-        await updateCmd.ExecuteNonQueryAsync(ct);
+        try
+        {
+            await updateCmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqliteException ex)
+        {
+            _logger?.DbError("SaveMessage/UpdateRoomActivity", ex, $"room_id={roomId}");
+        }
     }
 
     public async Task<List<Models.ChatMessage>> GetMessagesAsync(
@@ -644,7 +670,15 @@ public sealed class SecureDatabase : IAsyncDisposable
         pinCmd.Parameters.AddWithValue("@msgId", messageId);
         pinCmd.Parameters.AddWithValue("@roomId", roomId);
         pinCmd.Parameters.AddWithValue("@at", DateTimeOffset.UtcNow.ToString("O"));
-        await pinCmd.ExecuteNonQueryAsync(ct);
+        try
+        {
+            await pinCmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqliteException ex)
+        {
+            _logger?.DbError("PinMessage/INSERT", ex, $"message_id={messageId}, room_id={roomId}");
+            throw;
+        }
     }
 
     public async Task UnpinMessageAsync(string messageId, CancellationToken ct = default)
@@ -772,7 +806,15 @@ public sealed class SecureDatabase : IAsyncDisposable
         cmd.Parameters.AddWithValue("@id", id);
         cmd.Parameters.AddWithValue("@msgId", messageId);
         cmd.Parameters.AddWithValue("@data", encryptedData);
-        await cmd.ExecuteNonQueryAsync(ct);
+        try
+        {
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqliteException ex)
+        {
+            _logger?.DbError("SaveEncryptedFile", ex, $"id={id}, message_id={messageId}");
+            throw;
+        }
     }
 
     public async Task<byte[]?> GetEncryptedFileAsync(string id, CancellationToken ct = default)
@@ -796,7 +838,15 @@ public sealed class SecureDatabase : IAsyncDisposable
         cmd.Parameters.AddWithValue("@emoji", emoji);
         cmd.Parameters.AddWithValue("@sender", senderFingerprint);
         cmd.Parameters.AddWithValue("@at", DateTimeOffset.UtcNow.ToString("O"));
-        await cmd.ExecuteNonQueryAsync(ct);
+        try
+        {
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqliteException ex)
+        {
+            _logger?.DbError("AddReaction", ex, $"message_id={messageId}, emoji={emoji}");
+            throw;
+        }
     }
 
     public async Task RemoveReactionAsync(string messageId, string emoji, string senderFingerprint, CancellationToken ct = default)

@@ -32,11 +32,18 @@ public partial class App : Application
             "tordeX");
         Directory.CreateDirectory(dataDir);
 
+        // Application logger (singleton — file-based, thread-safe)
+        var logger = new AppLogger(dataDir);
+        services.AddSingleton(logger);
+
         // Core chat service (singleton — owns crypto, storage, network)
-        services.AddSingleton(new ChatService(dataDir));
+        services.AddSingleton(new ChatService(dataDir, logger));
 
         // Auto-update service (singleton — checks GitHub releases)
         services.AddSingleton<AutoUpdateService>();
+
+        // Platform abstraction for shared UI
+        services.AddSingleton<IPlatformService, WpfPlatformService>();
 
         // WPF + Blazor services
         services.AddWpfBlazorWebView();

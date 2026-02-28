@@ -2,11 +2,14 @@
 @using TordeX.Core.Services
 @inject ChatService Chat
 @inject AutoUpdateService Updater
+@inject IPlatformService Platform
+
+<div class="flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-primary)]">
 
 <!-- Update Banner -->
 @if (Updater.UpdateAvailable && !Updater.UpdateDismissed)
 {
-    <div class="w-full flex items-center px-5 py-2.5 text-[#fff]"
+    <div class="w-full shrink-0 flex items-center px-5 py-2.5 text-[#fff]"
          style="background: linear-gradient(135deg, var(--accent-dark), var(--accent), #7d3f99); animation: slideDown 350ms ease;">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -21,7 +24,7 @@
             @if (Updater.IsDownloading)
             {
                 <div class="flex items-center gap-2">
-                    <div class="w-[120px] h-1.5 rounded-full bg-white/20 overflow-hidden">
+                    <div class="progress-bar-w h-1.5 rounded-full bg-white-20 overflow-hidden">
                         <div class="h-full rounded-full bg-[#fff] transition-all duration-300"
                              style="width: @GetDownloadPercent()%"></div>
                     </div>
@@ -32,16 +35,16 @@
             {
                 <div class="flex items-center gap-2">
                     <span class="text-[11px]">@Updater.ErrorMessage</span>
-                    <button class="px-3 py-1 text-[12px] font-semibold rounded-[var(--radius-sm)] border border-white/40 bg-white/15 text-[#fff] cursor-pointer transition-colors duration-200 hover:bg-white/25"
+                    <button class="px-3 py-1 text-[12px] font-semibold rounded-[var(--radius-sm)] border border-white-40 bg-white-15 text-[#fff] cursor-pointer transition-colors duration-200 update-btn"
                             @onclick="DownloadUpdate">@L("UpdateNow")</button>
                 </div>
             }
             else
             {
-                <button class="px-3 py-1 text-[12px] font-semibold rounded-[var(--radius-sm)] border border-white/40 bg-white/15 text-[#fff] cursor-pointer transition-colors duration-200 hover:bg-white/25"
+                <button class="px-3 py-1 text-[12px] font-semibold rounded-[var(--radius-sm)] border border-white-40 bg-white-15 text-[#fff] cursor-pointer transition-colors duration-200 update-btn"
                         @onclick="DownloadUpdate">@L("UpdateNow")</button>
             }
-            <button class="p-1 rounded-[var(--radius-sm)] hover:bg-white/20 transition-colors duration-150 cursor-pointer bg-transparent text-[#fff] border-none"
+            <button class="p-1 rounded-[var(--radius-sm)] update-close transition-colors duration-150 cursor-pointer bg-transparent text-[#fff] border-none"
                     @onclick="() => Updater.UpdateDismissed = true" title="@L("Close")">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18" />
@@ -52,13 +55,13 @@
     </div>
 }
 
-<div class="flex h-screen w-screen overflow-hidden bg-[var(--bg-primary)]">
+<div class="flex flex-1 min-h-0 overflow-hidden">
     <!-- Sidebar -->
-    <aside class="w-[280px] shrink-0 flex flex-col bg-[var(--bg-secondary)] border-r border-[var(--border)] h-full">
+    <aside class="sidebar-w shrink-0 flex flex-col bg-[var(--bg-secondary)] border-r border-[var(--border)] h-full">
         <!-- Header -->
         <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
             <div class="flex items-center gap-2.5">
-                <img src="img/logo.png" alt="tordeX" width="32" height="32" />
+                <img src="_content/TordeX.UI/img/logo.png" alt="tordeX" width="32" height="32" />
                 <span class="text-[18px] font-semibold text-[var(--accent)]">tordeX</span>
             </div>
             <button class="p-1.5 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] transition-colors duration-150 cursor-pointer bg-transparent border-none"
@@ -82,7 +85,7 @@
             }
             else if (Chat.IsTorConnected)
             {
-                <div class="flex items-center gap-2 px-1 py-0.5 rounded-[var(--radius-sm)] bg-[rgba(46,204,113,0.08)]">
+                <div class="flex items-center gap-2 px-1 py-0.5 rounded-[var(--radius-sm)] bg-success-subtle">
                     <span class="w-2 h-2 rounded-full bg-[var(--success)] shadow-[0_0_6px_var(--success)]"></span>
                     <span class="text-[12px] text-[var(--success)] font-medium">@L("TorConnected")</span>
                 </div>
@@ -140,7 +143,7 @@
                                 <div class="flex items-center gap-1 mt-0.5">
                                     @if (_roomPasswords.ContainsKey(room.Id))
                                     {
-                                        <span class="text-[11px] px-1.5 py-0.5 rounded-[var(--radius-sm)] bg-[rgba(46,204,113,0.12)] text-[var(--success)]">@L("Unlocked")</span>
+                                        <span class="text-[11px] px-1.5 py-0.5 rounded-[var(--radius-sm)] bg-success-subtle-12 text-[var(--success)]">@L("Unlocked")</span>
                                     }
                                     else
                                     {
@@ -154,7 +157,7 @@
                             </div>
                             @if (room.UnreadCount > 0)
                             {
-                                <span class="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-[var(--accent)] text-[#fff] text-[11px] font-semibold">@room.UnreadCount</span>
+                                <span class="flex items-center justify-center badge-min-w h-5 px-1.5 rounded-full bg-[var(--accent)] text-[#fff] text-[11px] font-semibold">@room.UnreadCount</span>
                             }
                         </button>
                     }
@@ -214,7 +217,7 @@
         {
             <!-- Empty State -->
             <div class="flex-1 flex flex-col items-center justify-center bg-[var(--bg-primary)] h-full">
-                <img src="img/logo.png" alt="tordeX" width="80" height="80" class="opacity-20 mb-4" />
+                <img src="_content/TordeX.UI/img/logo.png" alt="tordeX" width="80" height="80" class="opacity-20 mb-4" />
                 <h2 class="text-[16px] font-semibold text-[var(--text-muted)] mb-1">@L("WelcomeMessage")</h2>
                 <p class="text-[13px] text-[var(--text-muted)] mb-6">@L("WelcomeSubtext")</p>
                 <div class="flex items-center gap-3">
@@ -250,14 +253,14 @@
         </div>
     </div>
 </div>
+</div>
 
 <!-- Room Password Dialog -->
 @if (_showRoomPassword)
 {
-    <div class="fixed inset-0 z-[1000] flex items-center justify-center" style="animation: fadeIn 150ms ease;" @onclick="CloseDialogs">
-        <div class="absolute inset-0 bg-[rgba(0,0,0,0.7)]"></div>
-        <div class="relative w-full max-w-[420px] rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-secondary)] p-6"
-             style="box-shadow: var(--shadow-lg); animation: slideUp 200ms ease;" @onclick:stopPropagation="true">
+    <div class="modal-overlay" @onclick="CloseDialogs">
+        <div class="modal-backdrop"></div>
+        <div class="modal-card" @onclick:stopPropagation="true">
             <h2 class="text-[18px] font-semibold mb-4 text-[var(--text-primary)]">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" style="vertical-align: middle; margin-right: 8px;">
                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -291,10 +294,9 @@
 <!-- Create Room Dialog -->
 @if (_showCreateRoom)
 {
-    <div class="fixed inset-0 z-[1000] flex items-center justify-center" style="animation: fadeIn 150ms ease;" @onclick="CloseDialogs">
-        <div class="absolute inset-0 bg-[rgba(0,0,0,0.7)]"></div>
-        <div class="relative w-full max-w-[420px] rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-secondary)] p-6"
-             style="box-shadow: var(--shadow-lg); animation: slideUp 200ms ease;" @onclick:stopPropagation="true">
+    <div class="modal-overlay" @onclick="CloseDialogs">
+        <div class="modal-backdrop"></div>
+        <div class="modal-card" @onclick:stopPropagation="true">
             <h2 class="text-[18px] font-semibold mb-4 text-[var(--text-primary)]">@L("CreateNewRoom")</h2>
             <div class="flex flex-col gap-3">
                 <div class="flex flex-col gap-1.5">
@@ -340,10 +342,9 @@
 <!-- Join Room Dialog -->
 @if (_showJoinRoom)
 {
-    <div class="fixed inset-0 z-[1000] flex items-center justify-center" style="animation: fadeIn 150ms ease;" @onclick="CloseDialogs">
-        <div class="absolute inset-0 bg-[rgba(0,0,0,0.7)]"></div>
-        <div class="relative w-full max-w-[420px] rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-secondary)] p-6"
-             style="box-shadow: var(--shadow-lg); animation: slideUp 200ms ease;" @onclick:stopPropagation="true">
+    <div class="modal-overlay" @onclick="CloseDialogs">
+        <div class="modal-backdrop"></div>
+        <div class="modal-card" @onclick:stopPropagation="true">
             <h2 class="text-[18px] font-semibold mb-4 text-[var(--text-primary)]">@L("JoinRoom")</h2>
             <div class="flex flex-col gap-3">
                 <div class="flex flex-col gap-1.5">
@@ -391,10 +392,9 @@
 <!-- Delete Room Confirm -->
 @if (_showDeleteConfirm)
 {
-    <div class="fixed inset-0 z-[1000] flex items-center justify-center" style="animation: fadeIn 150ms ease;" @onclick="CloseDialogs">
-        <div class="absolute inset-0 bg-[rgba(0,0,0,0.7)]"></div>
-        <div class="relative w-full max-w-[420px] rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-secondary)] p-6"
-             style="box-shadow: var(--shadow-lg); animation: slideUp 200ms ease;" @onclick:stopPropagation="true">
+    <div class="modal-overlay" @onclick="CloseDialogs">
+        <div class="modal-backdrop"></div>
+        <div class="modal-card" @onclick:stopPropagation="true">
             <h2 class="text-[18px] font-semibold mb-4 text-[var(--danger)]">@L("DeleteRoom")</h2>
             <p class="text-[13px] text-[var(--text-secondary)] mb-4">
                 @L("ConfirmDeleteRoom") <strong class="text-[var(--text-primary)]">@_deleteRoomTarget?.Name</strong>?
@@ -411,10 +411,9 @@
 <!-- Settings Dialog -->
 @if (_showSettings)
 {
-    <div class="fixed inset-0 z-[1000] flex items-center justify-center" style="animation: fadeIn 150ms ease;" @onclick="CloseDialogs">
-        <div class="absolute inset-0 bg-[rgba(0,0,0,0.7)]"></div>
-        <div class="relative w-full max-w-[480px] max-h-[85vh] rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-secondary)] overflow-hidden flex flex-col"
-             style="box-shadow: var(--shadow-lg); animation: slideUp 200ms ease;" @onclick:stopPropagation="true">
+    <div class="modal-overlay" @onclick="CloseDialogs">
+        <div class="modal-backdrop"></div>
+        <div class="modal-card-wide" @onclick:stopPropagation="true">
             <!-- Fixed Header -->
             <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] shrink-0">
                 <h2 class="text-[18px] font-semibold text-[var(--text-primary)]">@L("Settings")</h2>
@@ -544,7 +543,7 @@
                     </div>
                     @if (_secRamOnly)
                     {
-                        <div class="px-3 py-2 mb-2 rounded-[var(--radius-sm)] bg-[rgba(243,156,18,0.1)] border border-[rgba(243,156,18,0.3)]">
+                        <div class="px-3 py-2 mb-2 rounded-[var(--radius-sm)] bg-warning-subtle border border-warning-subtle">
                             <p class="text-[11px] text-[var(--warning)]">Messages will be lost when you close the app</p>
                         </div>
                     }
@@ -554,11 +553,11 @@
                     </div>
                     <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
                         <div><p class="text-[13px] text-[var(--text-primary)]">@L("MemoryProtection")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("MemoryProtectionDesc")</p></div>
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-[var(--radius-sm)] bg-[rgba(46,204,113,0.12)] text-[var(--success)] text-[11px] font-medium">DPAPI</span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-[var(--radius-sm)] bg-success-subtle-12 text-[var(--success)] text-[11px] font-medium">DPAPI</span>
                     </div>
                     <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
                         <div><p class="text-[13px] text-[var(--text-primary)]">@L("SecureWipe")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("SecureWipeDesc")</p></div>
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-[var(--radius-sm)] bg-[rgba(46,204,113,0.12)] text-[var(--success)] text-[11px] font-medium">DoD 5220</span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-[var(--radius-sm)] bg-success-subtle-12 text-[var(--success)] text-[11px] font-medium">DoD 5220</span>
                     </div>
                     <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
                         <div class="flex-1 min-w-0 mr-3"><p class="text-[13px] text-[var(--text-primary)]">@L("DeadManSwitch")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("DeadManSwitchDesc")</p></div>
@@ -566,7 +565,7 @@
                             @if (_secDeadMan)
                             {
                                 <input type="number" min="1" max="365"
-                                       class="w-[60px] h-7 px-2 text-[12px] text-center rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] outline-none"
+                                       class="input-sm-w h-7 px-2 text-[12px] text-center rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] outline-none"
                                        @bind="_secDeadManDays" placeholder="days" />
                             }
                             <label class="toggle-switch"><input type="checkbox" @bind="_secDeadMan" /><span class="toggle-slider"></span></label>
@@ -592,7 +591,7 @@
                     <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
                         <div><p class="text-[13px] text-[var(--text-primary)]">@L("BruteForceProtection")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("MaxLoginAttempts")</p></div>
                         <input type="number" min="1"
-                               class="w-[60px] h-7 px-2 text-[12px] text-center rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] outline-none"
+                               class="input-sm-w h-7 px-2 text-[12px] text-center rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] outline-none"
                                @bind="_secMaxAttempts" />
                     </div>
                 </div>
@@ -725,7 +724,7 @@
                 }
                 else
                 {
-                    <div class="p-3 rounded-[var(--radius-md)] border-2 border-[var(--danger)] bg-[rgba(231,76,60,0.08)]">
+                    <div class="p-3 rounded-[var(--radius-md)] border-2 border-[var(--danger)] bg-danger-subtle">
                         <p class="text-[13px] text-[var(--danger)] font-semibold mb-3">@L("CannotBeUndone")</p>
                         <div class="flex items-center gap-2">
                             <button class="px-4 py-2 rounded-[var(--radius-md)] bg-[var(--danger)] text-[#fff] text-[12px] font-semibold cursor-pointer border-none hover:brightness-110 transition-all uppercase tracking-wider"
@@ -760,7 +759,7 @@
 <!-- Panic Wipe Full-Screen Overlay -->
 @if (_panicWiping)
 {
-    <div class="fixed inset-0 z-[5000] flex items-center justify-center bg-[var(--bg-primary)]">
+    <div class="fixed inset-0 flex items-center justify-center bg-[var(--bg-primary)]" style="z-index: 5000;">
         <div class="flex flex-col items-center gap-4 text-center">
             <h3 class="text-[20px] font-semibold text-[var(--danger)]">WIPING ALL DATA...</h3>
             <p class="text-[13px] text-[var(--text-muted)]">Securely overwriting and deleting all files. Do not close the application.</p>
@@ -1168,9 +1167,10 @@
             ActivateRoom(room, _joinRoomPassword);
             _showJoinRoom = false;
         }
-        catch (Exception ex)
+        catch
         {
-            _dialogError = $"Failed: {ex.Message}";
+            // Silent fail — wrong password or error, just close dialog
+            _showJoinRoom = false;
         }
         finally
         {
@@ -1294,11 +1294,7 @@
 
     private void ApplyScreenCaptureProtection(bool enabled)
     {
-        // Access the WPF MainWindow to set display affinity
-        if (System.Windows.Application.Current?.MainWindow is MainWindow mainWindow)
-        {
-            mainWindow.SetScreenCaptureProtection(enabled);
-        }
+        Platform.SetScreenCaptureProtection(enabled);
     }
 
     // ──────── Password Change ────────
@@ -1400,10 +1396,7 @@
         var shouldExit = await Updater.DownloadAndApplyUpdateAsync();
         if (shouldExit)
         {
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-            {
-                System.Windows.Application.Current.Shutdown();
-            });
+            Platform.RequestShutdown();
         }
     }
 
@@ -1462,10 +1455,7 @@
             await Chat.PanicWipeAsync();
 
             // Force application exit after wipe
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-            {
-                System.Windows.Application.Current.Shutdown();
-            });
+            Platform.RequestShutdown();
         }
         catch (Exception ex)
         {
