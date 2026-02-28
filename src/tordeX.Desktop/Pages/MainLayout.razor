@@ -6,221 +6,247 @@
 <!-- Update Banner -->
 @if (Updater.UpdateAvailable && !Updater.UpdateDismissed)
 {
-    <div class="update-banner">
-        <div class="update-banner-content">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" class="update-icon">
-                <path d="M9 2v8M9 10l-3-3M9 10l3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M3 13v1a2 2 0 002 2h8a2 2 0 002-2v-1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-            <div class="update-info">
-                <span class="update-title">@L("UpdateAvailable")</span>
-                <span class="update-versions">
-                    <span class="update-version-old">@L("CurrentVersionLabel") @AutoUpdateService.CurrentVersion</span>
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="vertical-align: middle;">
-                        <path d="M4 6h4M6.5 4l2 2-2 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                    <span class="update-version-new">@L("NewVersionLabel") @Updater.LatestVersion</span>
-                </span>
-            </div>
+    <div class="w-full flex items-center px-5 py-2.5 text-[#fff]"
+         style="background: linear-gradient(135deg, var(--accent-dark), var(--accent), #7d3f99); animation: slideDown 350ms ease;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+        <div class="ml-3 flex flex-col">
+            <span class="text-[13px] font-semibold">@L("UpdateAvailable")</span>
+            <span class="text-[11px] opacity-70">@L("CurrentVersionLabel") @AutoUpdateService.CurrentVersion → @L("NewVersionLabel") @Updater.LatestVersion</span>
+        </div>
+        <div class="ml-auto flex items-center gap-3">
             @if (Updater.IsDownloading)
             {
-                <div class="update-progress-wrapper">
-                    <div class="update-progress-bar">
-                        <div class="update-progress-fill" style="width: @GetDownloadPercent()%"></div>
+                <div class="flex items-center gap-2">
+                    <div class="w-[120px] h-1.5 rounded-full bg-white/20 overflow-hidden">
+                        <div class="h-full rounded-full bg-[#fff] transition-all duration-300"
+                             style="width: @GetDownloadPercent()%"></div>
                     </div>
-                    <span class="update-progress-text">@FormatBytes(Updater.DownloadedBytes) / @FormatBytes(Updater.DownloadTotalBytes)</span>
+                    <span class="text-[11px] font-mono whitespace-nowrap">@FormatBytes(Updater.DownloadedBytes) / @FormatBytes(Updater.DownloadTotalBytes)</span>
                 </div>
             }
             else if (Updater.ErrorMessage is not null)
             {
-                <span class="update-error">@Updater.ErrorMessage</span>
-                <button class="btn-update" @onclick="DownloadUpdate">@L("UpdateNow")</button>
+                <div class="flex items-center gap-2">
+                    <span class="text-[11px]">@Updater.ErrorMessage</span>
+                    <button class="px-3 py-1 text-[12px] font-semibold rounded-[var(--radius-sm)] border border-white/40 bg-white/15 text-[#fff] cursor-pointer transition-colors duration-200 hover:bg-white/25"
+                            @onclick="DownloadUpdate">@L("UpdateNow")</button>
+                </div>
             }
             else
             {
-                <button class="btn-update" @onclick="DownloadUpdate">@L("UpdateNow")</button>
+                <button class="px-3 py-1 text-[12px] font-semibold rounded-[var(--radius-sm)] border border-white/40 bg-white/15 text-[#fff] cursor-pointer transition-colors duration-200 hover:bg-white/25"
+                        @onclick="DownloadUpdate">@L("UpdateNow")</button>
             }
+            <button class="p-1 rounded-[var(--radius-sm)] hover:bg-white/20 transition-colors duration-150 cursor-pointer bg-transparent text-[#fff] border-none"
+                    @onclick="() => Updater.UpdateDismissed = true" title="@L("Close")">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+            </button>
         </div>
-        <button class="update-dismiss" @onclick="() => Updater.UpdateDismissed = true" title="@L("Close")">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-        </button>
     </div>
 }
 
-<div class="app-layout">
+<div class="flex h-screen w-screen overflow-hidden bg-[var(--bg-primary)]">
     <!-- Sidebar -->
-    <div class="sidebar">
-        <div class="sidebar-header">
-            <img src="img/logo.png" alt="tordeX" />
-            <h1>tordeX</h1>
-            <div style="margin-left: auto;">
-                <button class="btn-icon" title="@L("Settings")" @onclick="() => OpenSettings()">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="3"/>
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                    </svg>
-                </button>
+    <aside class="w-[280px] shrink-0 flex flex-col bg-[var(--bg-secondary)] border-r border-[var(--border)] h-full">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+            <div class="flex items-center gap-2.5">
+                <img src="img/logo.png" alt="tordeX" width="32" height="32" />
+                <span class="text-[18px] font-semibold text-[var(--accent)]">tordeX</span>
             </div>
+            <button class="p-1.5 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] transition-colors duration-150 cursor-pointer bg-transparent border-none"
+                    title="@L("Settings")" @onclick="() => OpenSettings()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+            </button>
         </div>
 
-        <!-- Tor Status Banner -->
-        <div style="padding: 8px 12px; border-bottom: 1px solid var(--border);">
+        <!-- Tor Status -->
+        <div class="px-3 py-2 border-b border-[var(--border)]">
             @if (_torConnecting)
             {
-                <div class="tor-status connecting" style="width: 100%; justify-content: center;">
-                    <div class="status-dot connecting"></div>
-                    @L("ConnectingToTor")
+                <div class="flex items-center gap-2 px-1">
+                    <span class="w-2 h-2 rounded-full bg-[var(--warning)]"
+                          style="animation: pulse-dot 1.5s ease infinite;"></span>
+                    <span class="text-[12px] text-[var(--warning)]">@L("ConnectingToTor")</span>
                 </div>
             }
             else if (Chat.IsTorConnected)
             {
-                <div class="tor-status connected" style="width: 100%; justify-content: center; background: rgba(46, 204, 113, 0.08); border-radius: var(--radius-sm); padding: 6px 10px;">
-                    <span class="status-dot online" style="width: 8px; height: 8px; box-shadow: 0 0 6px var(--success);"></span>
-                    @L("TorConnected")
+                <div class="flex items-center gap-2 px-1 py-0.5 rounded-[var(--radius-sm)] bg-[rgba(46,204,113,0.08)]">
+                    <span class="w-2 h-2 rounded-full bg-[var(--success)] shadow-[0_0_6px_var(--success)]"></span>
+                    <span class="text-[12px] text-[var(--success)] font-medium">@L("TorConnected")</span>
                 </div>
             }
             else if (_torError is not null)
             {
-                <div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">
-                    <div class="tor-status" style="color: var(--danger); width: 100%; justify-content: center;">
-                        <div class="status-dot offline"></div>
-                        @L("TorFailed")
+                <div class="flex flex-col gap-1 px-1">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-[var(--danger)]"></span>
+                        <span class="text-[12px] text-[var(--danger)]">@L("TorFailed")</span>
                     </div>
-                    <button class="btn-tor-connect" style="font-size: 11px; padding: 4px 10px;" @onclick="ConnectTor">
-                        @L("RetryConnection")
-                    </button>
+                    <button class="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors bg-transparent border-none cursor-pointer text-left"
+                            @onclick="ConnectTor">@L("RetryConnection")</button>
                 </div>
             }
             else
             {
-                <button class="btn-tor-connect" @onclick="ConnectTor">
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                        <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.5"/>
-                        <circle cx="7" cy="7" r="3" stroke="currentColor" stroke-width="1"/>
-                        <circle cx="7" cy="7" r="0.5" fill="currentColor"/>
+                <button class="w-full flex items-center justify-center gap-2 px-3 py-2 text-[12px] font-semibold rounded-[var(--radius-md)] border border-[var(--accent)] text-[var(--accent)] bg-transparent cursor-pointer transition-colors duration-200 hover:bg-[var(--accent-glow)]"
+                        @onclick="ConnectTor">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <circle cx="12" cy="12" r="6" />
+                        <circle cx="12" cy="12" r="2" />
                     </svg>
                     @L("ConnectToTorNetwork")
                 </button>
             }
         </div>
 
-        <div class="sidebar-content">
+        <!-- Room List -->
+        <div class="flex-1 overflow-y-auto py-2">
             @if (_rooms.Count == 0)
             {
-                <div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px;">
-                    <p>@L("NoRoomsYet")</p>
-                    <p style="margin-top: 4px;">@L("CreateOrJoinRoom")</p>
+                <div class="flex flex-col items-center justify-center h-full px-4 text-center">
+                    <p class="text-[13px] text-[var(--text-muted)]">@L("NoRoomsYet")</p>
+                    <p class="text-[12px] text-[var(--text-muted)] mt-1">@L("CreateOrJoinRoom")</p>
                 </div>
             }
             else
             {
-                @foreach (var room in _rooms)
-                {
-                    <div class="room-item @(room.Id == _selectedRoomId ? "active" : "")"
-                         @onclick="() => SelectRoom(room)"
-                         @oncontextmenu="(e) => ShowRoomContextMenu(e, room)" @oncontextmenu:preventDefault="true">
-                        <div class="room-icon">@(room.Name.Length > 0 ? room.Name[0].ToString().ToUpper() : "?")</div>
-                        <div class="room-info">
-                            <div class="room-name">@room.Name</div>
-                            <div class="room-preview">
-                                @if (_roomPasswords.ContainsKey(room.Id))
-                                {
-                                    <span class="encryption-badge">@L("Unlocked")</span>
-                                }
-                                else
-                                {
-                                    <span style="font-size: 11px; color: var(--text-muted);">
-                                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="vertical-align: middle;">
-                                            <rect x="1" y="4.5" width="8" height="5" rx="1" stroke="currentColor" stroke-width="1"/>
-                                            <path d="M3 4.5V3a2 2 0 014 0v1.5" stroke="currentColor" stroke-width="1"/>
-                                        </svg>
-                                        @L("Locked")
-                                    </span>
-                                }
+                <div class="flex flex-col">
+                    @foreach (var room in _rooms)
+                    {
+                        <button class="flex items-center gap-3 px-3 py-2.5 transition-colors duration-150 cursor-pointer bg-transparent border-none w-full text-left"
+                                style="background: @(room.Id == _selectedRoomId ? "var(--bg-active)" : "transparent"); border-left: 3px solid @(room.Id == _selectedRoomId ? "var(--accent)" : "transparent");"
+                                @onclick="() => SelectRoom(room)"
+                                @oncontextmenu="(e) => ShowRoomContextMenu(e, room)" @oncontextmenu:preventDefault="true">
+                            <div class="w-10 h-10 rounded-[var(--radius-md)] flex items-center justify-center shrink-0 bg-[var(--accent-glow)]">
+                                <span class="text-[16px] font-semibold text-[var(--accent)]">@(room.Name.Length > 0 ? room.Name[0].ToString().ToUpper() : "?")</span>
                             </div>
-                        </div>
-                        @if (room.UnreadCount > 0)
-                        {
-                            <span class="room-badge">@room.UnreadCount</span>
-                        }
-                    </div>
-                }
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[14px] font-semibold text-[var(--text-primary)] truncate">@room.Name</span>
+                                </div>
+                                <div class="flex items-center gap-1 mt-0.5">
+                                    @if (_roomPasswords.ContainsKey(room.Id))
+                                    {
+                                        <span class="text-[11px] px-1.5 py-0.5 rounded-[var(--radius-sm)] bg-[rgba(46,204,113,0.12)] text-[var(--success)]">@L("Unlocked")</span>
+                                    }
+                                    else
+                                    {
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                        </svg>
+                                        <span class="text-[11px] text-[var(--text-muted)]">@L("Locked")</span>
+                                    }
+                                </div>
+                            </div>
+                            @if (room.UnreadCount > 0)
+                            {
+                                <span class="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-[var(--accent)] text-[#fff] text-[11px] font-semibold">@room.UnreadCount</span>
+                            }
+                        </button>
+                    }
+                </div>
             }
         </div>
 
-        <div class="sidebar-actions">
-            <button class="btn-new-room" @onclick="ShowCreateRoomDialog">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <!-- Action Buttons -->
+        <div class="px-3 py-3 border-t border-[var(--border)] flex flex-col gap-1.5">
+            <button class="w-full flex items-center justify-center gap-2 h-9 rounded-[var(--radius-md)] bg-[var(--accent)] text-[#fff] text-[13px] font-semibold cursor-pointer transition-colors duration-200 hover:bg-[var(--accent-light)] active:bg-[var(--accent-dark)] border-none"
+                    @onclick="ShowCreateRoomDialog">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
                 @L("NewRoom")
             </button>
-            <button class="btn-secondary" style="margin-top: 6px;" @onclick="ShowJoinRoomDialog">
+            <button class="w-full flex items-center justify-center gap-2 h-9 rounded-[var(--radius-md)] border border-[var(--border-light)] bg-transparent text-[var(--text-secondary)] text-[13px] font-semibold cursor-pointer transition-colors duration-200 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                    @onclick="ShowJoinRoomDialog">
                 @L("JoinRoom")
             </button>
         </div>
 
-        <div class="user-section">
-            <div class="avatar avatar-sm" style="background: var(--accent-glow); color: var(--accent);" title="@Chat.CurrentUser?.DisplayName">
+        <!-- User Profile -->
+        <div class="px-3 py-3 border-t border-[var(--border)] flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-full bg-[var(--accent-glow)] flex items-center justify-center shrink-0">
                 @if (Chat.CurrentUser?.AvatarData is { Length: > 0 })
                 {
-                    <img src="data:image/png;base64,@Convert.ToBase64String(Chat.CurrentUser.AvatarData)" alt="avatar" />
+                    <img src="data:image/png;base64,@Convert.ToBase64String(Chat.CurrentUser.AvatarData)" alt="avatar" class="w-8 h-8 rounded-full" />
                 }
                 else
                 {
-                    @(Chat.CurrentUser?.DisplayName.Length > 0 ? Chat.CurrentUser.DisplayName[0].ToString().ToUpper() : "?")
+                    <span class="text-[13px] font-semibold text-[var(--accent)]">@(Chat.CurrentUser?.DisplayName.Length > 0 ? Chat.CurrentUser.DisplayName[0].ToString().ToUpper() : "?")</span>
                 }
             </div>
-            <div style="min-width: 0; flex: 1;">
-                <div class="user-name">@Chat.CurrentUser?.DisplayName</div>
-                <div class="user-fingerprint">@Chat.UserFingerprint</div>
+            <div class="flex-1 min-w-0">
+                <p class="text-[13px] text-[var(--text-primary)] truncate">@Chat.CurrentUser?.DisplayName</p>
+                <p class="text-[11px] font-mono text-[var(--text-muted)] truncate">@Chat.UserFingerprint</p>
             </div>
-            <button class="btn-icon" style="margin-left: 4px;" title="Lock" @onclick="LockApp">
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <rect x="2" y="6" width="10" height="7" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
-                    <path d="M4.5 6V4.5a2.5 2.5 0 015 0V6" stroke="currentColor" stroke-width="1.2"/>
+            <button class="p-1.5 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] transition-colors duration-150 cursor-pointer bg-transparent border-none"
+                    title="Lock" @onclick="LockApp">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                 </svg>
             </button>
         </div>
-    </div>
+    </aside>
 
     <!-- Main Content -->
-    <div class="main-content">
+    <div class="flex-1 flex flex-col relative">
         @if (_selectedRoom is not null && _roomPasswords.ContainsKey(_selectedRoom.Id))
         {
             <ChatView Room="_selectedRoom" RoomPassword="_selectedRoomPassword" />
         }
         else
         {
-            <div class="empty-state">
-                <img src="img/logo.png" alt="tordeX" style="width: 80px; height: 80px; opacity: 0.2;" />
-                <h3>@L("WelcomeMessage")</h3>
-                <p>@L("WelcomeSubtext")</p>
-                <div style="margin-top: 16px; display: flex; gap: 8px;">
-                    <button class="btn-primary" style="width: auto; padding: 10px 24px;" @onclick="ShowCreateRoomDialog">
+            <!-- Empty State -->
+            <div class="flex-1 flex flex-col items-center justify-center bg-[var(--bg-primary)] h-full">
+                <img src="img/logo.png" alt="tordeX" width="80" height="80" class="opacity-20 mb-4" />
+                <h2 class="text-[16px] font-semibold text-[var(--text-muted)] mb-1">@L("WelcomeMessage")</h2>
+                <p class="text-[13px] text-[var(--text-muted)] mb-6">@L("WelcomeSubtext")</p>
+                <div class="flex items-center gap-3">
+                    <button class="flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-md)] bg-[var(--accent)] text-[#fff] text-[13px] font-semibold cursor-pointer transition-colors duration-200 hover:bg-[var(--accent-light)] active:bg-[var(--accent-dark)] border-none"
+                            @onclick="ShowCreateRoomDialog">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                            <line x1="12" y1="5" x2="12" y2="19" />
+                            <line x1="5" y1="12" x2="19" y2="12" />
+                        </svg>
                         @L("NewRoom")
                     </button>
-                    <button class="btn-secondary" style="width: auto; padding: 10px 24px;" @onclick="ShowJoinRoomDialog">
+                    <button class="flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-md)] border border-[var(--border-light)] bg-transparent text-[var(--text-secondary)] text-[13px] font-semibold cursor-pointer transition-colors duration-200 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                            @onclick="ShowJoinRoomDialog">
                         @L("JoinRoom")
                     </button>
                 </div>
             </div>
         }
 
-        <div class="status-bar">
-            <div style="display: flex; align-items: center; gap: 6px;">
-                <span class="status-dot @(Chat.IsTorConnected ? "online" : "offline")" style="width: 6px; height: 6px;"></span>
-                <span>Tor: @(Chat.IsTorConnected ? "Connected" : "Disconnected")</span>
+        <!-- Status Bar -->
+        <div class="flex items-center justify-between px-4 py-1.5 border-t border-[var(--border)] bg-[var(--bg-secondary)]">
+            <div class="flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-[var(--success)] shadow-[0_0_4px_var(--success)]" style="@(!Chat.IsTorConnected ? "background: var(--danger); box-shadow: none;" : "")"></span>
+                <span class="text-[11px] text-[var(--text-muted)]">Tor: @(Chat.IsTorConnected ? "Connected" : "Disconnected")</span>
             </div>
-            <span style="margin-left: auto; display: flex; align-items: center; gap: 6px;">
+            <div class="flex items-center gap-1.5">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                     <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                 </svg>
-                <span style="color: var(--success);">@L("EndToEndEncrypted")</span>
-            </span>
+                <span class="text-[11px] text-[var(--success)]">@L("EndToEndEncrypted")</span>
+            </div>
         </div>
     </div>
 </div>
@@ -228,33 +254,36 @@
 <!-- Room Password Dialog -->
 @if (_showRoomPassword)
 {
-    <div class="modal-backdrop" @onclick="CloseDialogs">
-        <div class="modal" @onclick:stopPropagation="true">
-            <div class="modal-title">
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style="vertical-align: middle; margin-right: 8px;">
-                    <rect x="3" y="8" width="12" height="8" rx="2" stroke="var(--accent)" stroke-width="1.5"/>
-                    <path d="M6 8V6a3 3 0 016 0v2" stroke="var(--accent)" stroke-width="1.5"/>
+    <div class="fixed inset-0 z-[1000] flex items-center justify-center" style="animation: fadeIn 150ms ease;" @onclick="CloseDialogs">
+        <div class="absolute inset-0 bg-[rgba(0,0,0,0.7)]"></div>
+        <div class="relative w-full max-w-[420px] rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-secondary)] p-6"
+             style="box-shadow: var(--shadow-lg); animation: slideUp 200ms ease;" @onclick:stopPropagation="true">
+            <h2 class="text-[18px] font-semibold mb-4 text-[var(--text-primary)]">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" style="vertical-align: middle; margin-right: 8px;">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                 </svg>
                 @L("UnlockRoom")
-            </div>
-            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
-                @L("EnterPasswordFor") <strong style="color: var(--text-primary);">@_unlockRoomTarget?.Name</strong>
+            </h2>
+            <p class="text-[13px] text-[var(--text-secondary)] mb-4">
+                @L("EnterPasswordFor") <strong class="text-[var(--text-primary)]">@_unlockRoomTarget?.Name</strong>
             </p>
-
-            <div class="form-group">
-                <label class="form-label">@L("RoomPassword")</label>
-                <input type="password" class="form-input" placeholder="@L("RoomPassword")"
-                       @bind="_unlockPassword" @bind:event="oninput"
-                       @onkeydown="HandleUnlockKeyDown" />
+            <div class="flex flex-col gap-3">
+                <div class="flex flex-col gap-1.5">
+                    <label class="text-[12px] text-[var(--text-secondary)] font-medium">@L("RoomPassword")</label>
+                    <input type="password" placeholder="@L("RoomPassword")"
+                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           @bind="_unlockPassword" @bind:event="oninput" @onkeydown="HandleUnlockKeyDown" />
+                </div>
+                @if (!string.IsNullOrEmpty(_dialogError))
+                {
+                    <p class="text-[12px] text-[var(--danger)]">@_dialogError</p>
+                }
+                <button class="w-full h-10 mt-2 rounded-[var(--radius-md)] bg-[var(--accent)] text-[#fff] text-[14px] font-semibold cursor-pointer transition-colors duration-200 hover:bg-[var(--accent-light)] active:bg-[var(--accent-dark)] border-none"
+                        @onclick="UnlockRoom">@L("Unlock")</button>
+                <button class="w-full h-9 rounded-[var(--radius-md)] border border-[var(--border-light)] bg-transparent text-[var(--text-secondary)] text-[13px] cursor-pointer transition-colors duration-200 hover:bg-[var(--bg-hover)]"
+                        @onclick="CloseDialogs">@L("Cancel")</button>
             </div>
-
-            @if (!string.IsNullOrEmpty(_dialogError))
-            {
-                <div class="form-error">@_dialogError</div>
-            }
-
-            <button class="btn-primary" @onclick="UnlockRoom">@L("Unlock")</button>
-            <button class="btn-secondary" @onclick="CloseDialogs">@L("Cancel")</button>
         </div>
     </div>
 }
@@ -262,46 +291,48 @@
 <!-- Create Room Dialog -->
 @if (_showCreateRoom)
 {
-    <div class="modal-backdrop" @onclick="CloseDialogs">
-        <div class="modal" @onclick:stopPropagation="true">
-            <div class="modal-title">@L("CreateNewRoom")</div>
-
-            <div class="form-group">
-                <label class="form-label">@L("RoomName")</label>
-                <input type="text" class="form-input" placeholder="My Secret Room"
-                       @bind="_newRoomName" @bind:event="oninput" maxlength="64" />
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">@L("RoomDescription")</label>
-                <input type="text" class="form-input" placeholder="Optional description..."
-                       @bind="_newRoomDescription" @bind:event="oninput" maxlength="256" />
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">@L("RoomPassword")</label>
-                <input type="password" class="form-input" placeholder="Strong shared password"
-                       @bind="_newRoomPassword" @bind:event="oninput" />
-                <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
-                    @L("SharePasswordHint")
+    <div class="fixed inset-0 z-[1000] flex items-center justify-center" style="animation: fadeIn 150ms ease;" @onclick="CloseDialogs">
+        <div class="absolute inset-0 bg-[rgba(0,0,0,0.7)]"></div>
+        <div class="relative w-full max-w-[420px] rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-secondary)] p-6"
+             style="box-shadow: var(--shadow-lg); animation: slideUp 200ms ease;" @onclick:stopPropagation="true">
+            <h2 class="text-[18px] font-semibold mb-4 text-[var(--text-primary)]">@L("CreateNewRoom")</h2>
+            <div class="flex flex-col gap-3">
+                <div class="flex flex-col gap-1.5">
+                    <label class="text-[12px] text-[var(--text-secondary)] font-medium">@L("RoomName")</label>
+                    <input type="text" placeholder="e.g. Security Research" maxlength="64"
+                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           @bind="_newRoomName" @bind:event="oninput" />
                 </div>
+                <div class="flex flex-col gap-1.5">
+                    <label class="text-[12px] text-[var(--text-secondary)] font-medium">@L("RoomDescription") <span class="text-[var(--text-muted)]">(optional)</span></label>
+                    <input type="text" placeholder="Brief room description" maxlength="256"
+                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           @bind="_newRoomDescription" @bind:event="oninput" />
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label class="text-[12px] text-[var(--text-secondary)] font-medium">@L("RoomPassword")</label>
+                    <input type="password" placeholder="Secure password"
+                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           @bind="_newRoomPassword" @bind:event="oninput" />
+                    <p class="text-[11px] text-[var(--text-muted)]">@L("SharePasswordHint")</p>
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label class="text-[12px] text-[var(--text-secondary)] font-medium">@L("MaxCapacity")</label>
+                    <input type="number" min="0" placeholder="0 = unlimited"
+                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           @bind="_newRoomCapacity" @bind:event="oninput" />
+                </div>
+                @if (!string.IsNullOrEmpty(_dialogError))
+                {
+                    <p class="text-[12px] text-[var(--danger)]">@_dialogError</p>
+                }
+                <button class="w-full h-10 mt-2 rounded-[var(--radius-md)] bg-[var(--accent)] text-[#fff] text-[14px] font-semibold cursor-pointer transition-colors duration-200 hover:bg-[var(--accent-light)] active:bg-[var(--accent-dark)] border-none"
+                        @onclick="CreateRoom" disabled="@_dialogLoading">
+                    @(_dialogLoading ? "Creating..." : L("CreateNewRoom"))
+                </button>
+                <button class="w-full h-9 rounded-[var(--radius-md)] border border-[var(--border-light)] bg-transparent text-[var(--text-secondary)] text-[13px] cursor-pointer transition-colors duration-200 hover:bg-[var(--bg-hover)]"
+                        @onclick="CloseDialogs">@L("Cancel")</button>
             </div>
-
-            <div class="form-group">
-                <label class="form-label">@L("MaxCapacity")</label>
-                <input type="number" class="form-input" min="0" max="1000" placeholder="0 = unlimited"
-                       @bind="_newRoomCapacity" @bind:event="oninput" />
-            </div>
-
-            @if (!string.IsNullOrEmpty(_dialogError))
-            {
-                <div class="form-error">@_dialogError</div>
-            }
-
-            <button class="btn-primary" @onclick="CreateRoom" disabled="@_dialogLoading">
-                @(_dialogLoading ? "Creating..." : L("CreateNewRoom"))
-            </button>
-            <button class="btn-secondary" @onclick="CloseDialogs">@L("Cancel")</button>
         </div>
     </div>
 }
@@ -309,48 +340,50 @@
 <!-- Join Room Dialog -->
 @if (_showJoinRoom)
 {
-    <div class="modal-backdrop" @onclick="CloseDialogs">
-        <div class="modal" @onclick:stopPropagation="true">
-            <div class="modal-title">@L("JoinRoom")</div>
-
-            <div class="form-group">
-                <label class="form-label">@L("RoomIdOrInvite")</label>
-                <input type="text" class="form-input" placeholder="@L("PasteRoomIdOrInvite")"
-                       value="@_joinInput"
-                       @oninput="OnJoinInputChanged" />
-                @if (_inviteLinkDetected)
+    <div class="fixed inset-0 z-[1000] flex items-center justify-center" style="animation: fadeIn 150ms ease;" @onclick="CloseDialogs">
+        <div class="absolute inset-0 bg-[rgba(0,0,0,0.7)]"></div>
+        <div class="relative w-full max-w-[420px] rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-secondary)] p-6"
+             style="box-shadow: var(--shadow-lg); animation: slideUp 200ms ease;" @onclick:stopPropagation="true">
+            <h2 class="text-[18px] font-semibold mb-4 text-[var(--text-primary)]">@L("JoinRoom")</h2>
+            <div class="flex flex-col gap-3">
+                <div class="flex flex-col gap-1.5">
+                    <label class="text-[12px] text-[var(--text-secondary)] font-medium">@L("RoomIdOrInvite")</label>
+                    <input type="text" placeholder="@L("PasteRoomIdOrInvite")"
+                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           value="@_joinInput" @oninput="OnJoinInputChanged" />
+                    @if (_inviteLinkDetected)
+                    {
+                        <div class="flex items-center gap-1.5 mt-0.5" style="animation: fadeIn 200ms ease;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            <span class="text-[11px] text-[var(--success)]">@L("InviteLinkDetected")</span>
+                        </div>
+                    }
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label class="text-[12px] text-[var(--text-secondary)] font-medium">@L("RoomNameOptional") <span class="text-[var(--text-muted)]">(optional)</span></label>
+                    <input type="text" placeholder="@L("RoomNameOptionalPlaceholder")"
+                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           @bind="_joinRoomName" @bind:event="oninput" />
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label class="text-[12px] text-[var(--text-secondary)] font-medium">@L("RoomPassword")</label>
+                    <input type="password" placeholder="@L("RoomSharedPassword")"
+                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           @bind="_joinRoomPassword" @bind:event="oninput" />
+                </div>
+                @if (!string.IsNullOrEmpty(_dialogError))
                 {
-                    <div class="invite-detected-badge">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                            <circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.2"/>
-                            <path d="M4 6l1.5 1.5L8 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        @L("InviteLinkDetected")
-                    </div>
+                    <p class="text-[12px] text-[var(--danger)]">@_dialogError</p>
                 }
+                <button class="w-full h-10 mt-2 rounded-[var(--radius-md)] bg-[var(--accent)] text-[#fff] text-[14px] font-semibold cursor-pointer transition-colors duration-200 hover:bg-[var(--accent-light)] active:bg-[var(--accent-dark)] border-none"
+                        @onclick="JoinRoom" disabled="@_dialogLoading">
+                    @(_dialogLoading ? "Joining..." : L("JoinRoom"))
+                </button>
+                <button class="w-full h-9 rounded-[var(--radius-md)] border border-[var(--border-light)] bg-transparent text-[var(--text-secondary)] text-[13px] cursor-pointer transition-colors duration-200 hover:bg-[var(--bg-hover)]"
+                        @onclick="CloseDialogs">@L("Cancel")</button>
             </div>
-
-            <div class="form-group">
-                <label class="form-label">@L("RoomNameOptional")</label>
-                <input type="text" class="form-input" placeholder="@L("RoomNameOptionalPlaceholder")"
-                       @bind="_joinRoomName" @bind:event="oninput" />
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">@L("RoomPassword")</label>
-                <input type="password" class="form-input" placeholder="@L("RoomSharedPassword")"
-                       @bind="_joinRoomPassword" @bind:event="oninput" />
-            </div>
-
-            @if (!string.IsNullOrEmpty(_dialogError))
-            {
-                <div class="form-error">@_dialogError</div>
-            }
-
-            <button class="btn-primary" @onclick="JoinRoom" disabled="@_dialogLoading">
-                @(_dialogLoading ? "Joining..." : L("JoinRoom"))
-            </button>
-            <button class="btn-secondary" @onclick="CloseDialogs">@L("Cancel")</button>
         </div>
     </div>
 }
@@ -358,510 +391,367 @@
 <!-- Delete Room Confirm -->
 @if (_showDeleteConfirm)
 {
-    <div class="modal-backdrop" @onclick="CloseDialogs">
-        <div class="modal" @onclick:stopPropagation="true">
-            <div class="modal-title" style="color: var(--danger);">@L("DeleteRoom")</div>
-            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
-                @L("ConfirmDeleteRoom") <strong style="color: var(--text-primary);">@_deleteRoomTarget?.Name</strong>?
+    <div class="fixed inset-0 z-[1000] flex items-center justify-center" style="animation: fadeIn 150ms ease;" @onclick="CloseDialogs">
+        <div class="absolute inset-0 bg-[rgba(0,0,0,0.7)]"></div>
+        <div class="relative w-full max-w-[420px] rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-secondary)] p-6"
+             style="box-shadow: var(--shadow-lg); animation: slideUp 200ms ease;" @onclick:stopPropagation="true">
+            <h2 class="text-[18px] font-semibold mb-4 text-[var(--danger)]">@L("DeleteRoom")</h2>
+            <p class="text-[13px] text-[var(--text-secondary)] mb-4">
+                @L("ConfirmDeleteRoom") <strong class="text-[var(--text-primary)]">@_deleteRoomTarget?.Name</strong>?
                 @L("PermanentDeleteWarning")
             </p>
-
-            <button class="btn-primary" style="background: var(--danger);" @onclick="ConfirmDeleteRoom">
-                @L("DeleteRoom")
-            </button>
-            <button class="btn-secondary" @onclick="CloseDialogs">@L("Cancel")</button>
+            <button class="w-full h-10 mt-2 rounded-[var(--radius-md)] bg-[var(--danger)] text-[#fff] text-[14px] font-semibold cursor-pointer transition-colors duration-200 hover:brightness-110 border-none"
+                    @onclick="ConfirmDeleteRoom">@L("DeleteRoom")</button>
+            <button class="w-full h-9 mt-2 rounded-[var(--radius-md)] border border-[var(--border-light)] bg-transparent text-[var(--text-secondary)] text-[13px] cursor-pointer transition-colors duration-200 hover:bg-[var(--bg-hover)]"
+                    @onclick="CloseDialogs">@L("Cancel")</button>
         </div>
     </div>
 }
 
-<!-- Settings Dialog (Full Featured) -->
+<!-- Settings Dialog -->
 @if (_showSettings)
 {
-    <div class="modal-backdrop" @onclick="CloseDialogs">
-        <div class="modal" style="max-width: 480px; max-height: 85vh; overflow: hidden; padding: 0; display: flex; flex-direction: column;" @onclick:stopPropagation="true">
+    <div class="fixed inset-0 z-[1000] flex items-center justify-center" style="animation: fadeIn 150ms ease;" @onclick="CloseDialogs">
+        <div class="absolute inset-0 bg-[rgba(0,0,0,0.7)]"></div>
+        <div class="relative w-full max-w-[480px] max-h-[85vh] rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-secondary)] overflow-hidden flex flex-col"
+             style="box-shadow: var(--shadow-lg); animation: slideUp 200ms ease;" @onclick:stopPropagation="true">
             <!-- Fixed Header -->
-            <div style="display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--border); flex-shrink: 0;">
-                <span class="modal-title" style="margin-bottom: 0;">@L("Settings")</span>
-                <button class="btn-icon" style="width: 28px; height: 28px;" @onclick="CloseDialogs" title="@L("Close")">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] shrink-0">
+                <h2 class="text-[18px] font-semibold text-[var(--text-primary)]">@L("Settings")</h2>
+                <button class="p-1.5 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer bg-transparent border-none"
+                        @onclick="CloseDialogs">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round">
                         <line x1="18" y1="6" x2="6" y2="18"/>
                         <line x1="6" y1="6" x2="18" y2="18"/>
                     </svg>
                 </button>
             </div>
-            <!-- Scrollable Body -->
-            <div style="flex: 1; overflow-y: auto; padding: 0 24px 24px;">
 
-            <!-- Profile Section -->
-            <div class="settings-section">
-                <div class="settings-section-title">Profile</div>
-
-                <div class="form-group">
-                    <label class="form-label">@L("DisplayName")</label>
-                    <input type="text" class="form-input" @bind="_settingsDisplayName" @bind:event="oninput" maxlength="32" />
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">@L("YourFingerprint")</label>
-                    <input type="text" class="form-input" value="@Chat.UserFingerprint" readonly
-                           style="font-family: var(--font-mono); font-size: 12px; user-select: text;" />
-                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
-                        @L("FingerprintDescription")
+            <!-- Scrollable Content -->
+            <div class="flex-1 overflow-y-auto px-6 pb-6">
+                <!-- PROFILE -->
+                <h3 class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mt-6 mb-3">Profile</h3>
+                <div class="flex flex-col gap-3">
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-[12px] text-[var(--text-secondary)]">@L("DisplayName")</label>
+                        <input type="text" maxlength="32"
+                               class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                               @bind="_settingsDisplayName" @bind:event="oninput" />
+                    </div>
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-[12px] text-[var(--text-secondary)]">@L("YourFingerprint")</label>
+                        <p class="text-[12px] font-mono text-[var(--text-secondary)] select-text bg-[var(--bg-tertiary)] px-3 py-2 rounded-[var(--radius-sm)]">@Chat.UserFingerprint</p>
+                    </div>
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-[12px] text-[var(--text-secondary)]">@L("PublicKey")</label>
+                        <p class="text-[12px] font-mono text-[var(--text-secondary)] select-text bg-[var(--bg-tertiary)] px-3 py-2 rounded-[var(--radius-sm)] truncate">@(Chat.CurrentUser is not null ? Convert.ToBase64String(Chat.CurrentUser.PublicKey)[..40] + "..." : "")</p>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label">@L("PublicKey")</label>
-                    <input type="text" class="form-input"
-                           value="@(Chat.CurrentUser is not null ? Convert.ToBase64String(Chat.CurrentUser.PublicKey)[..40] + "..." : "")"
-                           readonly style="font-family: var(--font-mono); font-size: 11px; user-select: text;" />
-                </div>
-            </div>
-
-            <!-- Language Section -->
-            <div class="settings-section">
-                <div class="settings-section-title">@L("Language")</div>
-                <div class="language-selector">
-                    <select class="language-select" @onchange="OnLanguageChanged" value="@_settingsLanguage">
+                <!-- LANGUAGE -->
+                <h3 class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mt-6 mb-3">@L("Language")</h3>
+                <div class="relative">
+                    <select class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)] appearance-none cursor-pointer"
+                            @onchange="OnLanguageChanged" value="@_settingsLanguage">
                         <option value="en">English</option>
                         <option value="tr">Turkce</option>
                     </select>
-                </div>
-            </div>
-
-            <!-- Security Section -->
-            <div class="settings-section">
-                <div class="settings-section-title">@L("SecurityInfo")</div>
-
-                <div style="font-size: 12px; color: var(--text-secondary); padding: 8px; background: var(--bg-tertiary); border-radius: var(--radius-md); margin-bottom: 12px;">
-                    <div style="margin-bottom: 4px;"><strong>@L("Encryption"):</strong> AES-256-GCM</div>
-                    <div style="margin-bottom: 4px;"><strong>@L("KeyDerivation"):</strong> PBKDF2-SHA512 (600K iterations)</div>
-                    <div style="margin-bottom: 4px;"><strong>@L("KeyExchange"):</strong> ECDH P-256 + HKDF</div>
-                    <div style="margin-bottom: 4px;"><strong>@L("Signatures"):</strong> ECDSA P-256</div>
-                    <div><strong>@L("Network"):</strong> Tor SOCKS5 Onion Routing</div>
+                    <svg class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9" /></svg>
                 </div>
 
-                <!-- Auto-Lock -->
-                <div class="settings-item">
-                    <div class="settings-item-info">
-                        <div class="settings-item-label">@L("AutoLock")</div>
-                        <div class="settings-item-desc">
-                            @if (_settingsAutoLock > 0)
-                            {
-                                @($"{_settingsAutoLock} {L("Minutes")}")
-                            }
-                            else
-                            {
-                                @L("Never")
-                            }
-                        </div>
+                <!-- SECURITY INFO -->
+                <h3 class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mt-6 mb-3">@L("SecurityInfo")</h3>
+                <div class="rounded-[var(--radius-md)] bg-[var(--bg-tertiary)] border border-[var(--border)] p-3 flex flex-col gap-2">
+                    <div class="flex items-center justify-between"><span class="text-[12px] text-[var(--text-muted)]">@L("Encryption")</span><span class="text-[12px] text-[var(--text-secondary)]">AES-256-GCM</span></div>
+                    <div class="flex items-center justify-between"><span class="text-[12px] text-[var(--text-muted)]">@L("KeyDerivation")</span><span class="text-[12px] text-[var(--text-secondary)]">PBKDF2-SHA512 (600K iterations)</span></div>
+                    <div class="flex items-center justify-between"><span class="text-[12px] text-[var(--text-muted)]">@L("KeyExchange")</span><span class="text-[12px] text-[var(--text-secondary)]">ECDH P-256 + HKDF</span></div>
+                    <div class="flex items-center justify-between"><span class="text-[12px] text-[var(--text-muted)]">@L("Signatures")</span><span class="text-[12px] text-[var(--text-secondary)]">ECDSA P-256</span></div>
+                    <div class="flex items-center justify-between"><span class="text-[12px] text-[var(--text-muted)]">@L("Network")</span><span class="text-[12px] text-[var(--text-secondary)]">Tor SOCKS5 Onion Routing</span></div>
+                </div>
+
+                <!-- CRYPTOGRAPHY -->
+                <h3 class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mt-6 mb-3">@L("CryptoSettings")</h3>
+                <div class="flex flex-col">
+                    <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
+                        <div class="flex-1 min-w-0 mr-3"><p class="text-[13px] text-[var(--text-primary)]">@L("DoubleRatchet")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("DoubleRatchetDesc")</p></div>
+                        <label class="toggle-switch"><input type="checkbox" @bind="_secDoubleRatchet" /><span class="toggle-slider"></span></label>
                     </div>
-                    <select class="language-select" style="width: 120px;" @bind="_settingsAutoLock">
-                        <option value="0">@L("Never")</option>
-                        <option value="1">1 min</option>
-                        <option value="5">5 min</option>
-                        <option value="15">15 min</option>
-                        <option value="30">30 min</option>
-                        <option value="60">60 min</option>
-                    </select>
+                    <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
+                        <div class="flex-1 min-w-0 mr-3"><p class="text-[13px] text-[var(--text-primary)]">@L("PostQuantum")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("PostQuantumDesc")</p></div>
+                        <label class="toggle-switch"><input type="checkbox" @bind="_secPostQuantum" /><span class="toggle-slider"></span></label>
+                    </div>
+                    <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
+                        <div class="flex-1 min-w-0 mr-3"><p class="text-[13px] text-[var(--text-primary)]">@L("MultiLayerEncryption")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("MultiLayerEncryptionDesc")</p></div>
+                        <label class="toggle-switch"><input type="checkbox" @bind="_secMultiLayer" /><span class="toggle-slider"></span></label>
+                    </div>
+                    <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
+                        <div class="flex-1 min-w-0 mr-3"><p class="text-[13px] text-[var(--text-primary)]">@L("DeniableEncryption")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("DeniableEncryptionDesc")</p></div>
+                        <label class="toggle-switch"><input type="checkbox" @bind="_secDeniable" /><span class="toggle-slider"></span></label>
+                    </div>
                 </div>
 
-                <!-- Notification Sounds -->
-                <div class="settings-item">
-                    <div class="settings-item-info">
-                        <div class="settings-item-label">@L("NotificationSounds")</div>
+                <!-- NETWORK SECURITY -->
+                <h3 class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mt-6 mb-3">@L("NetworkSecurity")</h3>
+                <div class="flex flex-col">
+                    <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
+                        <div class="flex-1 min-w-0 mr-3"><p class="text-[13px] text-[var(--text-primary)]">@L("TrafficObfuscation")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("TrafficObfuscationDesc")</p></div>
+                        <label class="toggle-switch"><input type="checkbox" @bind="_secTrafficObf" /><span class="toggle-slider"></span></label>
                     </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" @bind="_settingsNotifSounds" />
-                        <span class="toggle-slider"></span>
-                    </label>
+                    <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
+                        <div class="flex-1 min-w-0 mr-3"><p class="text-[13px] text-[var(--text-primary)]">@L("TimingProtection")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("TimingProtectionDesc")</p></div>
+                        <label class="toggle-switch"><input type="checkbox" @bind="_secTiming" /><span class="toggle-slider"></span></label>
+                    </div>
+                    <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
+                        <div class="flex-1 min-w-0 mr-3"><p class="text-[13px] text-[var(--text-primary)]">@L("DnsLeakProtection")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("DnsLeakProtectionDesc")</p></div>
+                        <label class="toggle-switch"><input type="checkbox" @bind="_secDnsLeak" /><span class="toggle-slider"></span></label>
+                    </div>
+                    <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
+                        <div class="flex-1 min-w-0 mr-3"><p class="text-[13px] text-[var(--text-primary)]">@L("CertificatePinning")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("CertificatePinningDesc")</p></div>
+                        <label class="toggle-switch"><input type="checkbox" @bind="_secCertPinning" /><span class="toggle-slider"></span></label>
+                    </div>
                 </div>
 
-                <!-- Screen Capture Protection -->
-                <div class="settings-item">
-                    <div class="settings-item-info">
-                        <div class="settings-item-label">@L("ScreenCaptureProtection")</div>
-                        <div class="settings-item-desc">Window appears black in screenshots</div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" @bind="_settingsScreenCapture" />
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-            </div>
-
-            <!-- ═══════ SECURITY & PRIVACY DASHBOARD ═══════ -->
-            <div class="settings-section">
-                <div class="settings-section-title">@L("CryptoSettings")</div>
-
-                <div class="security-toggle">
-                    <div class="security-toggle-info">
-                        <div class="security-toggle-label">@L("DoubleRatchet")</div>
-                        <div class="security-toggle-desc">@L("DoubleRatchetDesc")</div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" @bind="_secDoubleRatchet" />
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-
-                <div class="security-toggle">
-                    <div class="security-toggle-info">
-                        <div class="security-toggle-label">@L("PostQuantum")</div>
-                        <div class="security-toggle-desc">@L("PostQuantumDesc")</div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" @bind="_secPostQuantum" />
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-
-                <div class="security-toggle">
-                    <div class="security-toggle-info">
-                        <div class="security-toggle-label">@L("MultiLayerEncryption")</div>
-                        <div class="security-toggle-desc">@L("MultiLayerEncryptionDesc")</div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" @bind="_secMultiLayer" />
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-
-                <div class="security-toggle">
-                    <div class="security-toggle-info">
-                        <div class="security-toggle-label">@L("DeniableEncryption")</div>
-                        <div class="security-toggle-desc">@L("DeniableEncryptionDesc")</div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" @bind="_secDeniable" />
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-            </div>
-
-            <div class="settings-section">
-                <div class="settings-section-title">@L("NetworkSecurity")</div>
-
-                <div class="security-toggle">
-                    <div class="security-toggle-info">
-                        <div class="security-toggle-label">@L("TrafficObfuscation")</div>
-                        <div class="security-toggle-desc">@L("TrafficObfuscationDesc")</div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" @bind="_secTrafficObf" />
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-
-                <div class="security-toggle">
-                    <div class="security-toggle-info">
-                        <div class="security-toggle-label">@L("TimingProtection")</div>
-                        <div class="security-toggle-desc">@L("TimingProtectionDesc")</div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" @bind="_secTiming" />
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-
-                <div class="security-toggle">
-                    <div class="security-toggle-info">
-                        <div class="security-toggle-label">@L("DnsLeakProtection")</div>
-                        <div class="security-toggle-desc">@L("DnsLeakProtectionDesc")</div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" @bind="_secDnsLeak" />
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-
-                <div class="security-toggle">
-                    <div class="security-toggle-info">
-                        <div class="security-toggle-label">@L("CertificatePinning")</div>
-                        <div class="security-toggle-desc">@L("CertificatePinningDesc")</div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" @bind="_secCertPinning" />
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-
-                <!-- Tor Bridge Config -->
-                <div class="security-toggle" style="flex-direction: column; align-items: stretch; gap: 8px;">
-                    <div class="security-toggle-info">
-                        <div class="security-toggle-label">@L("TorBridge")</div>
-                        <div class="security-toggle-desc">@L("TorBridgeDesc")</div>
-                    </div>
-                    <input type="text" class="form-input bridge-input" placeholder="obfs4 IP:PORT FINGERPRINT..."
-                           @bind="_secBridgeLine" style="font-size: 11px;" />
-                    <div class="transport-selector">
+                <!-- Tor Bridge -->
+                <div class="mt-3 flex flex-col gap-2">
+                    <label class="text-[12px] text-[var(--text-secondary)]">@L("TorBridge")</label>
+                    <input type="text" placeholder="Bridge line"
+                           class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           @bind="_secBridgeLine" />
+                    <div class="flex items-center gap-2">
                         @{ var transports = new[] { "obfs4", "meek", "snowflake" }; }
                         @foreach (var t in transports)
                         {
-                            <button class="@GetTransportBtnClass(t)" @onclick="() => ToggleTransport(t)">@t</button>
+                            <button class="px-3 py-1.5 rounded-full text-[11px] font-medium cursor-pointer transition-colors duration-200 border @(_secTransport == t ? "bg-[var(--accent)] text-[#fff] border-[var(--accent)]" : "bg-transparent text-[var(--text-secondary)] border-[var(--border-light)] hover:bg-[var(--bg-hover)]")"
+                                    @onclick="() => ToggleTransport(t)">@t</button>
                         }
                     </div>
                 </div>
 
                 <!-- Guard Node Pinning -->
-                <div class="security-toggle" style="flex-direction: column; align-items: stretch; gap: 8px;">
-                    <div class="security-toggle-info">
-                        <div class="security-toggle-label">@L("GuardPinning")</div>
-                        <div class="security-toggle-desc">@L("GuardPinningDesc")</div>
-                    </div>
-                    <input type="text" class="form-input bridge-input" placeholder="$FINGERPRINT1,$FINGERPRINT2,..."
-                           @bind="_secGuardNodes" style="font-size: 11px;" />
-                </div>
-            </div>
-
-            <div class="settings-section">
-                <div class="settings-section-title">@L("DataProtection")</div>
-
-                <div class="security-toggle">
-                    <div class="security-toggle-info">
-                        <div class="security-toggle-label">@L("RamOnlyMode")</div>
-                        <div class="security-toggle-desc">@L("RamOnlyModeDesc")</div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" @bind="_secRamOnly" />
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-                @if (_secRamOnly)
-                {
-                    <div class="ram-only-warning">
-                        ⚠ Messages will be lost when you close the app
-                    </div>
-                }
-
-                <div class="security-toggle">
-                    <div class="security-toggle-info">
-                        <div class="security-toggle-label">@L("AutoMetadataStrip")</div>
-                        <div class="security-toggle-desc">@L("AutoMetadataStripDesc")</div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" @bind="_secAutoMeta" />
-                        <span class="toggle-slider"></span>
-                    </label>
+                <div class="mt-3 flex flex-col gap-1.5">
+                    <label class="text-[12px] text-[var(--text-secondary)]">@L("GuardPinning")</label>
+                    <input type="text" placeholder="Fingerprints"
+                           class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           @bind="_secGuardNodes" />
                 </div>
 
-                <div class="security-toggle">
-                    <div class="security-toggle-info">
-                        <div class="security-toggle-label">@L("MemoryProtection")</div>
-                        <div class="security-toggle-desc">@L("MemoryProtectionDesc")</div>
+                <!-- DATA PROTECTION -->
+                <h3 class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mt-6 mb-3">@L("DataProtection")</h3>
+                <div class="flex flex-col">
+                    <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
+                        <div class="flex-1 min-w-0 mr-3"><p class="text-[13px] text-[var(--text-primary)]">@L("RamOnlyMode")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("RamOnlyModeDesc")</p></div>
+                        <label class="toggle-switch"><input type="checkbox" @bind="_secRamOnly" /><span class="toggle-slider"></span></label>
                     </div>
-                    <span class="security-badge active">DPAPI</span>
-                </div>
-
-                <div class="security-toggle">
-                    <div class="security-toggle-info">
-                        <div class="security-toggle-label">@L("SecureWipe")</div>
-                        <div class="security-toggle-desc">@L("SecureWipeDesc")</div>
-                    </div>
-                    <span class="security-badge active">DoD 5220</span>
-                </div>
-
-                <!-- Dead Man's Switch -->
-                <div class="security-toggle" style="flex-direction: column; align-items: stretch; gap: 8px;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-                        <div class="security-toggle-info">
-                            <div class="security-toggle-label">@L("DeadManSwitch")</div>
-                            <div class="security-toggle-desc">@L("DeadManSwitchDesc")</div>
-                        </div>
-                        <label class="toggle-switch">
-                            <input type="checkbox" @bind="_secDeadMan" />
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                    @if (_secDeadMan)
+                    @if (_secRamOnly)
                     {
-                        <div class="dead-man-config">
-                            <div class="dead-man-days">
-                                @L("DeadManSwitchDays"):
-                                <input type="number" min="1" max="365" @bind="_secDeadManDays" />
-                            </div>
+                        <div class="px-3 py-2 mb-2 rounded-[var(--radius-sm)] bg-[rgba(243,156,18,0.1)] border border-[rgba(243,156,18,0.3)]">
+                            <p class="text-[11px] text-[var(--warning)]">Messages will be lost when you close the app</p>
                         </div>
                     }
-                </div>
-            </div>
-
-            <div class="settings-section">
-                <div class="settings-section-title">@L("ThreatMonitoring")</div>
-
-                <div class="security-toggle">
-                    <div class="security-toggle-info">
-                        <div class="security-toggle-label">@L("TamperDetection")</div>
-                        <div class="security-toggle-desc">@L("TamperDetectionDesc")</div>
+                    <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
+                        <div class="flex-1 min-w-0 mr-3"><p class="text-[13px] text-[var(--text-primary)]">@L("AutoMetadataStrip")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("AutoMetadataStripDesc")</p></div>
+                        <label class="toggle-switch"><input type="checkbox" @bind="_secAutoMeta" /><span class="toggle-slider"></span></label>
                     </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" @bind="_secTamper" />
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-
-                <div class="security-toggle">
-                    <div class="security-toggle-info">
-                        <div class="security-toggle-label">@L("IntegrityMonitoring")</div>
-                        <div class="security-toggle-desc">@L("IntegrityMonitoringDesc")</div>
+                    <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
+                        <div><p class="text-[13px] text-[var(--text-primary)]">@L("MemoryProtection")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("MemoryProtectionDesc")</p></div>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-[var(--radius-sm)] bg-[rgba(46,204,113,0.12)] text-[var(--success)] text-[11px] font-medium">DPAPI</span>
                     </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" @bind="_secIntegrity" />
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-
-                <div class="security-toggle">
-                    <div class="security-toggle-info">
-                        <div class="security-toggle-label">@L("CanaryTokens")</div>
-                        <div class="security-toggle-desc">@L("CanaryTokensDesc")</div>
+                    <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
+                        <div><p class="text-[13px] text-[var(--text-primary)]">@L("SecureWipe")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("SecureWipeDesc")</p></div>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-[var(--radius-sm)] bg-[rgba(46,204,113,0.12)] text-[var(--success)] text-[11px] font-medium">DoD 5220</span>
                     </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" @bind="_secCanary" />
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-
-                <div class="security-toggle">
-                    <div class="security-toggle-info">
-                        <div class="security-toggle-label">@L("BruteForceProtection")</div>
-                    </div>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <input type="number" min="3" max="20" @bind="_secMaxAttempts" style="width: 50px; padding: 4px 6px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 12px; text-align: center;" />
-                        <span style="font-size: 11px; color: var(--text-muted);">@L("MaxLoginAttempts")</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Change Password Section -->
-            <div class="settings-section">
-                <div class="settings-section-title">@L("ChangePassword")</div>
-                @if (!_showPasswordChange)
-                {
-                    <button class="btn-secondary" style="width: 100%; margin-top: 0;" @onclick="() => _showPasswordChange = true">
-                        @L("ChangePassword")
-                    </button>
-                }
-                else
-                {
-                    <div class="password-change-form">
-                        <div class="form-group">
-                            <label class="form-label">@L("CurrentPassword")</label>
-                            <input type="password" class="form-input" @bind="_pwdCurrent" @bind:event="oninput" />
+                    <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
+                        <div class="flex-1 min-w-0 mr-3"><p class="text-[13px] text-[var(--text-primary)]">@L("DeadManSwitch")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("DeadManSwitchDesc")</p></div>
+                        <div class="flex items-center gap-2">
+                            @if (_secDeadMan)
+                            {
+                                <input type="number" min="1" max="365"
+                                       class="w-[60px] h-7 px-2 text-[12px] text-center rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] outline-none"
+                                       @bind="_secDeadManDays" placeholder="days" />
+                            }
+                            <label class="toggle-switch"><input type="checkbox" @bind="_secDeadMan" /><span class="toggle-slider"></span></label>
                         </div>
-                        <div class="form-group">
-                            <label class="form-label">@L("NewPassword")</label>
-                            <input type="password" class="form-input" @bind="_pwdNew" @bind:event="oninput" />
-                            @{ var strength = GetPasswordStrength(_pwdNew); }
-                            <div class="password-strength">
-                                <div class="password-strength-bar @(strength >= 1 ? $"filled {GetStrengthClass(strength)}" : "")"></div>
-                                <div class="password-strength-bar @(strength >= 2 ? $"filled {GetStrengthClass(strength)}" : "")"></div>
-                                <div class="password-strength-bar @(strength >= 3 ? $"filled {GetStrengthClass(strength)}" : "")"></div>
-                                <div class="password-strength-bar @(strength >= 4 ? $"filled {GetStrengthClass(strength)}" : "")"></div>
-                            </div>
+                    </div>
+                </div>
+
+                <!-- THREAT MONITORING -->
+                <h3 class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mt-6 mb-3">@L("ThreatMonitoring")</h3>
+                <div class="flex flex-col">
+                    <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
+                        <div class="flex-1 min-w-0 mr-3"><p class="text-[13px] text-[var(--text-primary)]">@L("TamperDetection")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("TamperDetectionDesc")</p></div>
+                        <label class="toggle-switch"><input type="checkbox" @bind="_secTamper" /><span class="toggle-slider"></span></label>
+                    </div>
+                    <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
+                        <div class="flex-1 min-w-0 mr-3"><p class="text-[13px] text-[var(--text-primary)]">@L("IntegrityMonitoring")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("IntegrityMonitoringDesc")</p></div>
+                        <label class="toggle-switch"><input type="checkbox" @bind="_secIntegrity" /><span class="toggle-slider"></span></label>
+                    </div>
+                    <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
+                        <div class="flex-1 min-w-0 mr-3"><p class="text-[13px] text-[var(--text-primary)]">@L("CanaryTokens")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("CanaryTokensDesc")</p></div>
+                        <label class="toggle-switch"><input type="checkbox" @bind="_secCanary" /><span class="toggle-slider"></span></label>
+                    </div>
+                    <div class="flex items-center justify-between py-2.5 border-b border-[var(--border)]">
+                        <div><p class="text-[13px] text-[var(--text-primary)]">@L("BruteForceProtection")</p><p class="text-[11px] text-[var(--text-muted)] mt-0.5">@L("MaxLoginAttempts")</p></div>
+                        <input type="number" min="1"
+                               class="w-[60px] h-7 px-2 text-[12px] text-center rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] outline-none"
+                               @bind="_secMaxAttempts" />
+                    </div>
+                </div>
+
+                <!-- AUTO-LOCK -->
+                <h3 class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mt-6 mb-3">@L("AutoLock")</h3>
+                <div class="relative">
+                    <select class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)] appearance-none cursor-pointer"
+                            @bind="_settingsAutoLock">
+                        <option value="0">@L("Never")</option>
+                        <option value="1">1 minute</option>
+                        <option value="5">5 minutes</option>
+                        <option value="15">15 minutes</option>
+                        <option value="30">30 minutes</option>
+                        <option value="60">60 minutes</option>
+                    </select>
+                    <svg class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9" /></svg>
+                </div>
+
+                <!-- NOTIFICATION SOUNDS -->
+                <h3 class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mt-6 mb-3">@L("NotificationSounds")</h3>
+                <label class="toggle-switch"><input type="checkbox" @bind="_settingsNotifSounds" /><span class="toggle-slider"></span></label>
+
+                <!-- SCREEN CAPTURE -->
+                <h3 class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mt-6 mb-3">@L("ScreenCaptureProtection")</h3>
+                <div class="flex items-center justify-between">
+                    <p class="text-[12px] text-[var(--text-muted)]">Window appears black in screenshots</p>
+                    <label class="toggle-switch"><input type="checkbox" @bind="_settingsScreenCapture" /><span class="toggle-slider"></span></label>
+                </div>
+
+                <!-- CHANGE PASSWORD -->
+                <h3 class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mt-6 mb-3">@L("ChangePassword")</h3>
+                <button class="flex items-center gap-2 text-[13px] text-[var(--accent)] cursor-pointer bg-transparent border-none hover:text-[var(--accent-light)] transition-colors"
+                        @onclick="() => _showPasswordChange = !_showPasswordChange">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                         style="transform: @(_showPasswordChange ? "rotate(90deg)" : "rotate(0deg)"); transition: transform 200ms;">
+                        <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                    @(_showPasswordChange ? "Hide" : L("ChangePassword"))
+                </button>
+                @if (_showPasswordChange)
+                {
+                    <div class="flex flex-col gap-3 mt-3 p-3 rounded-[var(--radius-md)] bg-[var(--bg-tertiary)] border border-[var(--border)]">
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-[12px] text-[var(--text-secondary)]">@L("CurrentPassword")</label>
+                            <input type="password"
+                                   class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                                   @bind="_pwdCurrent" @bind:event="oninput" />
                         </div>
-                        <div class="form-group">
-                            <label class="form-label">@L("ConfirmNewPassword")</label>
-                            <input type="password" class="form-input" @bind="_pwdConfirm" @bind:event="oninput" />
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-[12px] text-[var(--text-secondary)]">@L("NewPassword")</label>
+                            <input type="password"
+                                   class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                                   @bind="_pwdNew" @bind:event="oninput" />
+                            @if (!string.IsNullOrEmpty(_pwdNew))
+                            {
+                                var strength = GetPasswordStrength(_pwdNew);
+                                <div class="flex items-center gap-1 mt-1">
+                                    @for (int seg = 1; seg <= 4; seg++)
+                                    {
+                                        var segLocal = seg;
+                                        <div class="flex-1 h-1 rounded-full" style="background: @(segLocal <= strength ? (strength <= 1 ? "var(--danger)" : strength <= 3 ? "var(--warning)" : "var(--success)") : "var(--border)");"></div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-[12px] text-[var(--text-secondary)]">@L("ConfirmNewPassword")</label>
+                            <input type="password"
+                                   class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                                   @bind="_pwdConfirm" @bind:event="oninput" />
                             @if (!string.IsNullOrEmpty(_pwdConfirm))
                             {
-                                <div class="password-match-indicator @(_pwdNew == _pwdConfirm ? "match" : "no-match")">
+                                <p class="text-[11px] @(_pwdNew == _pwdConfirm ? "text-[var(--success)]" : "text-[var(--danger)]")">
                                     @(_pwdNew == _pwdConfirm ? "Passwords match" : "Passwords do not match")
-                                </div>
+                                </p>
                             }
                         </div>
                         @if (!string.IsNullOrEmpty(_pwdError))
                         {
-                            <div class="form-error">@_pwdError</div>
+                            <p class="text-[12px] text-[var(--danger)]">@_pwdError</p>
                         }
                         @if (!string.IsNullOrEmpty(_pwdSuccess))
                         {
-                            <div style="font-size: 12px; color: var(--success);">@_pwdSuccess</div>
+                            <p class="text-[12px] text-[var(--success)]">@_pwdSuccess</p>
                         }
-                        <div style="display: flex; gap: 8px;">
-                            <button class="btn-primary" style="flex: 1;" @onclick="ChangePassword" disabled="@_pwdLoading">
-                                @(_pwdLoading ? "Changing..." : L("Save"))
-                            </button>
-                            <button class="btn-secondary" style="flex: 1; margin-top: 0;" @onclick="() => _showPasswordChange = false">
-                                @L("Cancel")
-                            </button>
+                        <div class="flex items-center gap-2 mt-1">
+                            <button class="px-4 py-1.5 rounded-[var(--radius-md)] bg-[var(--accent)] text-[#fff] text-[12px] font-semibold cursor-pointer border-none hover:bg-[var(--accent-light)] transition-colors"
+                                    @onclick="ChangePassword" disabled="@_pwdLoading">@(_pwdLoading ? "Changing..." : L("Save"))</button>
+                            <button class="px-4 py-1.5 rounded-[var(--radius-md)] border border-[var(--border-light)] bg-transparent text-[var(--text-secondary)] text-[12px] cursor-pointer hover:bg-[var(--bg-hover)] transition-colors"
+                                    @onclick="() => _showPasswordChange = false">@L("Cancel")</button>
                         </div>
                     </div>
                 }
-            </div>
 
-            <!-- Blocked Users Section -->
-            <div class="settings-section">
-                <div class="settings-section-title">@L("BlockedUsers")</div>
+                <!-- BLOCKED USERS -->
+                <h3 class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mt-6 mb-3">@L("BlockedUsers")</h3>
                 @if (_blockedUsers.Count == 0)
                 {
-                    <div style="font-size: 13px; color: var(--text-muted); padding: 8px 0;">
-                        @L("NoBlockedUsers")
-                    </div>
+                    <p class="text-[12px] text-[var(--text-muted)]">@L("NoBlockedUsers")</p>
                 }
                 else
                 {
                     @foreach (var blocked in _blockedUsers)
                     {
-                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border);">
+                        <div class="flex items-center justify-between py-2 border-b border-[var(--border)]">
                             <div>
-                                <div style="font-size: 13px; color: var(--text-primary);">@(blocked.DisplayName ?? "Unknown")</div>
-                                <div style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">@blocked.Fingerprint[..16]...</div>
+                                <p class="text-[13px] text-[var(--text-primary)]">@(blocked.DisplayName ?? "Unknown")</p>
+                                <p class="text-[11px] text-[var(--text-muted)] font-mono">@blocked.Fingerprint[..16]...</p>
                             </div>
-                            <button class="btn-secondary" style="padding: 4px 12px; font-size: 12px; margin-top: 0;" @onclick="() => UnblockUser(blocked.Fingerprint)">
-                                @L("Unblock")
-                            </button>
+                            <button class="px-3 py-1.5 rounded-[var(--radius-md)] border border-[var(--border-light)] bg-transparent text-[var(--text-secondary)] text-[12px] cursor-pointer hover:bg-[var(--bg-hover)] transition-colors"
+                                    @onclick="() => UnblockUser(blocked.Fingerprint)">@L("Unblock")</button>
                         </div>
                     }
                 }
-            </div>
 
-            <!-- Panic Button Section -->
-            <div class="settings-section">
-                <div class="settings-section-title" style="color: var(--danger);">@L("PanicButton")</div>
+                <!-- PANIC BUTTON -->
+                <h3 class="text-[11px] uppercase tracking-wider text-[var(--danger)] font-semibold mt-6 mb-3">@L("PanicButton")</h3>
                 @if (!_showPanicConfirm)
                 {
-                    <button class="btn-panic" @onclick="() => _showPanicConfirm = true">
-                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                            <path d="M9 2L2 16h14L9 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-                            <path d="M9 7v4M9 13v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    <button class="flex items-center gap-2 px-4 py-2.5 rounded-[var(--radius-md)] bg-[var(--danger)] text-[#fff] text-[13px] font-semibold cursor-pointer border-none hover:brightness-110 transition-all"
+                            @onclick="() => _showPanicConfirm = true">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                            <line x1="12" y1="9" x2="12" y2="13" />
+                            <line x1="12" y1="17" x2="12.01" y2="17" />
                         </svg>
                         @L("DeleteAllData")
                     </button>
                 }
                 else
                 {
-                    <div style="padding: 16px; background: rgba(231, 76, 60, 0.1); border: 1px solid var(--danger); border-radius: var(--radius-md);">
-                        <p style="font-size: 14px; color: var(--danger); font-weight: 600; margin-bottom: 8px;">
-                            @L("CannotBeUndone")
-                        </p>
-                        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
-                            All messages, rooms, keys, and profile data will be permanently destroyed.
-                        </p>
-                        <div class="panic-confirm-actions">
-                            <button class="btn-panic" @onclick="ExecutePanicWipe" disabled="@_panicLoading">
-                                @(_panicLoading ? "WIPING..." : "CONFIRM WIPE")
-                            </button>
-                            <button class="btn-secondary" @onclick="() => _showPanicConfirm = false">
-                                @L("Cancel")
-                            </button>
+                    <div class="p-3 rounded-[var(--radius-md)] border-2 border-[var(--danger)] bg-[rgba(231,76,60,0.08)]">
+                        <p class="text-[13px] text-[var(--danger)] font-semibold mb-3">@L("CannotBeUndone")</p>
+                        <div class="flex items-center gap-2">
+                            <button class="px-4 py-2 rounded-[var(--radius-md)] bg-[var(--danger)] text-[#fff] text-[12px] font-semibold cursor-pointer border-none hover:brightness-110 transition-all uppercase tracking-wider"
+                                    @onclick="ExecutePanicWipe" disabled="@_panicLoading">@(_panicLoading ? "WIPING..." : "CONFIRM WIPE")</button>
+                            <button class="px-4 py-2 rounded-[var(--radius-md)] border border-[var(--border-light)] bg-transparent text-[var(--text-secondary)] text-[12px] cursor-pointer hover:bg-[var(--bg-hover)] transition-colors"
+                                    @onclick="() => _showPanicConfirm = false">@L("Cancel")</button>
                         </div>
                     </div>
                 }
+
+                @if (!string.IsNullOrEmpty(_settingsError))
+                {
+                    <p class="text-[12px] text-[var(--danger)] mt-2">@_settingsError</p>
+                }
+                @if (!string.IsNullOrEmpty(_settingsSuccess))
+                {
+                    <p class="text-[12px] text-[var(--success)] mt-2">@_settingsSuccess</p>
+                }
             </div>
 
-            @if (!string.IsNullOrEmpty(_settingsError))
-            {
-                <div class="form-error">@_settingsError</div>
-            }
-            @if (!string.IsNullOrEmpty(_settingsSuccess))
-            {
-                <div style="font-size: 12px; color: var(--success); margin-top: 4px;">@_settingsSuccess</div>
-            }
-            </div>
             <!-- Fixed Footer -->
-            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 24px; border-top: 1px solid var(--border); flex-shrink: 0;">
-                <button class="btn-secondary" style="width: auto; padding: 8px 16px; margin-top: 0;" @onclick="CloseDialogs">@L("Close")</button>
-                <button class="btn-primary" style="width: auto; padding: 8px 20px; margin-top: 0;" @onclick="SaveSettings">@L("Save")</button>
+            <div class="flex items-center justify-end gap-2 px-6 py-3 border-t border-[var(--border)] shrink-0">
+                <button class="px-4 py-2 rounded-[var(--radius-md)] border border-[var(--border-light)] bg-transparent text-[var(--text-secondary)] text-[13px] cursor-pointer hover:bg-[var(--bg-hover)] transition-colors"
+                        @onclick="CloseDialogs">@L("Close")</button>
+                <button class="px-5 py-2 rounded-[var(--radius-md)] bg-[var(--accent)] text-[#fff] text-[13px] font-semibold cursor-pointer border-none hover:bg-[var(--accent-light)] transition-colors"
+                        @onclick="SaveSettings">@L("Save")</button>
             </div>
         </div>
     </div>
@@ -870,10 +760,10 @@
 <!-- Panic Wipe Full-Screen Overlay -->
 @if (_panicWiping)
 {
-    <div class="panic-confirm-overlay">
-        <div class="panic-confirm-dialog">
-            <h3>WIPING ALL DATA...</h3>
-            <p>Securely overwriting and deleting all files. Do not close the application.</p>
+    <div class="fixed inset-0 z-[5000] flex items-center justify-center bg-[var(--bg-primary)]">
+        <div class="flex flex-col items-center gap-4 text-center">
+            <h3 class="text-[20px] font-semibold text-[var(--danger)]">WIPING ALL DATA...</h3>
+            <p class="text-[13px] text-[var(--text-muted)]">Securely overwriting and deleting all files. Do not close the application.</p>
         </div>
     </div>
 }
@@ -899,6 +789,7 @@
     private string _joinRoomName = string.Empty;
     private string _joinRoomPassword = string.Empty;
     private string _joinInviteToken = string.Empty;
+    private string _joinOnionAddress = string.Empty;
     private bool _inviteLinkDetected;
     private string _unlockPassword = string.Empty;
     private ChatRoom? _unlockRoomTarget;
@@ -963,9 +854,6 @@
     // Localization helper
     private static string L(string key) => LocalizationService.T(key);
 
-    private string GetTransportBtnClass(string transport) =>
-        $"transport-btn{(_secTransport == transport ? " active" : "")}";
-
     private void ToggleTransport(string transport) =>
         _secTransport = _secTransport == transport ? null : transport;
 
@@ -999,6 +887,9 @@
         try
         {
             await Chat.StartTorAsync();
+
+            // Auto-reconnect to rooms with known onion addresses
+            _ = ReconnectToRoomPeersAsync();
         }
         catch (Exception ex)
         {
@@ -1009,6 +900,22 @@
         {
             _torConnecting = false;
             await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ReconnectToRoomPeersAsync()
+    {
+        foreach (var room in _rooms)
+        {
+            if (!string.IsNullOrEmpty(room.OnionAddress) && _roomPasswords.ContainsKey(room.Id))
+            {
+                try
+                {
+                    Chat.UnlockRoom(room.Id, _roomPasswords[room.Id], room.RoomSalt);
+                    await Chat.ConnectToRoomPeerAsync(room.Id, room.OnionAddress);
+                }
+                catch { /* best effort */ }
+            }
         }
     }
 
@@ -1145,6 +1052,7 @@
         _joinRoomName = string.Empty;
         _joinRoomPassword = string.Empty;
         _joinInviteToken = string.Empty;
+        _joinOnionAddress = string.Empty;
         _inviteLinkDetected = false;
     }
 
@@ -1244,6 +1152,17 @@
 
             var name = string.IsNullOrWhiteSpace(_joinRoomName) ? "Room " + roomId[..Math.Min(8, roomId.Length)] : _joinRoomName;
             var room = await Chat.JoinRoomAsync(roomId, name, _joinRoomPassword, roomSalt);
+
+            // Set onion address from invite link and connect to peer
+            var onionAddr = !string.IsNullOrEmpty(_joinOnionAddress) ? _joinOnionAddress : null;
+            if (onionAddr is not null)
+            {
+                room.OnionAddress = onionAddr;
+                await Chat.UpdateRoomAsync(room);
+                // Connect to room host in background
+                _ = Chat.ConnectToRoomPeerAsync(room.Id, onionAddr);
+            }
+
             _rooms.Insert(0, room);
             _roomPasswords[room.Id] = _joinRoomPassword;
             ActivateRoom(room, _joinRoomPassword);
@@ -1446,14 +1365,6 @@
         return score;
     }
 
-    private static string GetStrengthClass(int strength) => strength switch
-    {
-        <= 1 => "weak",
-        2 => "medium",
-        3 => "medium",
-        _ => "strong"
-    };
-
     // ──────── Blocked Users ────────
 
     private async Task UnblockUser(string fingerprint)
@@ -1520,11 +1431,12 @@
         if (value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
         {
             var remainder = value[prefix.Length..];
-            var parts = remainder.Split('/', 2, StringSplitOptions.RemoveEmptyEntries);
+            var parts = remainder.Split('/', 3, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length >= 1)
             {
                 _joinRoomId = parts[0];
                 _joinInviteToken = parts.Length >= 2 ? parts[1] : string.Empty;
+                _joinOnionAddress = parts.Length >= 3 ? parts[2] : string.Empty;
                 _inviteLinkDetected = true;
                 return;
             }
@@ -1534,6 +1446,7 @@
         _inviteLinkDetected = false;
         _joinRoomId = string.Empty;
         _joinInviteToken = string.Empty;
+        _joinOnionAddress = string.Empty;
     }
 
     // ──────── Panic Wipe ────────

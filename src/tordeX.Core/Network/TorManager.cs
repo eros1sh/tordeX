@@ -1,3 +1,5 @@
+using System.Net.Sockets;
+using System.Text;
 using Knapcode.TorSharp;
 
 namespace TordeX.Core.Network;
@@ -5,17 +7,24 @@ namespace TordeX.Core.Network;
 /// <summary>
 /// Manages embedded Tor process lifecycle.
 /// Provides SOCKS5 proxy for all P2P connections.
+/// Creates ephemeral hidden services via Tor control port.
 /// </summary>
 public sealed class TorManager : IAsyncDisposable
 {
     private TorSharpProxy? _proxy;
     private readonly string _dataDirectory;
+    private string? _controlPassword;
     private bool _disposed;
     private bool _isRunning;
 
     public int SocksPort { get; private set; } = 9050;
     public int ControlPort { get; private set; } = 9051;
     public bool IsRunning => _isRunning;
+
+    /// <summary>
+    /// Onion address of our hidden service (set after CreateHiddenServiceAsync).
+    /// </summary>
+    public string? OnionAddress { get; private set; }
 
     /// <summary>
     /// Event fired when Tor connection status changes.
@@ -35,6 +44,8 @@ public sealed class TorManager : IAsyncDisposable
     {
         if (_isRunning) return;
 
+        _controlPassword = Cryptography.SecureRandom.GenerateHex(16);
+
         var settings = new TorSharpSettings
         {
             ZippedToolsDirectory = Path.Combine(_dataDirectory, "tor-zipped"),
@@ -45,7 +56,7 @@ public sealed class TorManager : IAsyncDisposable
             {
                 SocksPort = SocksPort,
                 ControlPort = ControlPort,
-                ControlPassword = Cryptography.SecureRandom.GenerateHex(16)
+                ControlPassword = _controlPassword
             }
         };
 
@@ -71,6 +82,51 @@ public sealed class TorManager : IAsyncDisposable
         await _proxy.ConfigureAndStartAsync();
         _isRunning = true;
         ConnectionStatusChanged?.Invoke(true);
+    }
+
+    /// <summary>
+    /// Create an ephemeral Tor hidden service via control port ADD_ONION.
+    /// The hidden service maps the given port to 127.0.0.1:localPort.
+    /// </summary>
+    public async Task CreateHiddenServiceAsync(int localPort, CancellationToken ct = default)
+    {
+        if (!_isRunning || _controlPassword is null)
+            throw new InvalidOperationException("Tor is not running.");
+
+        using var client = new TcpClient();
+        await client.ConnectAsync("127.0.0.1", ControlPort, ct);
+        var stream = client.GetStream();
+        stream.ReadTimeout = 10_000;
+        stream.WriteTimeout = 10_000;
+
+        using var reader = new StreamReader(stream, Encoding.ASCII);
+        using var writer = new StreamWriter(stream, Encoding.ASCII) { AutoFlush = true };
+
+        // Authenticate with control port
+        await writer.WriteLineAsync($"AUTHENTICATE \"{_controlPassword}\"");
+        var authResponse = await reader.ReadLineAsync(ct);
+        if (authResponse is null || !authResponse.StartsWith("250"))
+            throw new InvalidOperationException($"Tor control auth failed: {authResponse}");
+
+        // Create ephemeral hidden service
+        // ADD_ONION creates an in-memory hidden service that disappears when Tor stops
+        await writer.WriteLineAsync($"ADD_ONION NEW:BEST Port={localPort},127.0.0.1:{localPort}");
+
+        // Parse multi-line response
+        string? serviceId = null;
+        string? line;
+        while ((line = await reader.ReadLineAsync(ct)) is not null)
+        {
+            if (line.StartsWith("250-ServiceID="))
+                serviceId = line["250-ServiceID=".Length..].Trim();
+            if (line.StartsWith("250 "))
+                break;
+        }
+
+        if (serviceId is null)
+            throw new InvalidOperationException("Failed to create Tor hidden service.");
+
+        OnionAddress = $"{serviceId}.onion";
     }
 
     /// <summary>
@@ -111,6 +167,7 @@ public sealed class TorManager : IAsyncDisposable
 
         _proxy.Stop();
         _isRunning = false;
+        OnionAddress = null;
         ConnectionStatusChanged?.Invoke(false);
         await Task.CompletedTask;
     }

@@ -72,6 +72,29 @@ public sealed class P2PMessage
 }
 
 /// <summary>
+/// Chat message payload for P2P transport.
+/// Serialized inside the encrypted P2PMessage.Payload.
+/// </summary>
+[MessagePackObject]
+public sealed class ChatMessagePayload
+{
+    [Key(0)] public string Id { get; set; } = string.Empty;
+    [Key(1)] public string SenderFingerprint { get; set; } = string.Empty;
+    [Key(2)] public string SenderDisplayName { get; set; } = string.Empty;
+    [Key(3)] public int Type { get; set; }
+    [Key(4)] public string Content { get; set; } = string.Empty;
+    [Key(5)] public string? FileName { get; set; }
+    [Key(6)] public long? FileSize { get; set; }
+    [Key(7)] public string? MimeType { get; set; }
+    [Key(8)] public long Timestamp { get; set; }
+    [Key(9)] public string? ReplyToId { get; set; }
+    [Key(10)] public string? ReplyToContent { get; set; }
+    [Key(11)] public string? ReplyToSenderName { get; set; }
+    [Key(12)] public int? SelfDestructSeconds { get; set; }
+    [Key(13)] public double? VoiceDuration { get; set; }
+}
+
+/// <summary>
 /// Handshake payload: exchanged during peer connection setup.
 /// </summary>
 [MessagePackObject]

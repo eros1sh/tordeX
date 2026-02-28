@@ -45,8 +45,10 @@ Most "encrypted" messengers still rely on central servers, collect metadata, and
 
 ### Communication
 - **Encrypted Text Messaging** - AES-256-GCM with per-message keys
+- **Encrypted Voice Messages** - Record, encrypt (AES-256-GCM), send via Tor, playback with waveform
 - **Encrypted Image Sharing** - Full metadata stripping before transmission
 - **Encrypted File Transfer** - Any file type, zero metadata leakage
+- **Disappearing Messages** - Client-enforced TTL (5–300 seconds), auto-delete from database
 - **View-Once Messages** - Self-destructing images and media
 - **Message Reactions** - Express yourself without compromising privacy
 - **Markdown Support** - Rich text formatting with **bold**, *italic*, `code`, and more
@@ -54,6 +56,7 @@ Most "encrypted" messengers still rely on central servers, collect metadata, and
 - **Message Bookmarks** - Save important messages locally (encrypted)
 - **Emoji Picker** - Full emoji support with categorized picker
 - **Typing Indicators** - Real-time presence (over Tor)
+- **P2P Message Delivery** - Real-time via Tor hidden services (ephemeral onion addresses)
 
 ### Room System
 - **Password-Protected Rooms** - PBKDF2-SHA512 derived room keys (600K iterations)
@@ -571,13 +574,17 @@ We take all security reports seriously and will respond within 48 hours.
 - [x] Bridge/pluggable transport support
 - [x] Multi-language (EN/TR)
 
+### Recently Completed
+- [x] Voice messages (encrypted) — MediaRecorder + AES-256-GCM + Web Audio playback
+- [x] Disappearing messages with client-enforced TTL — auto-delete timer (5–300s)
+- [x] P2P message delivery via Tor hidden services — ephemeral onion addresses
+- [x] Auto-update from GitHub Releases — download + apply + restart
+
 ### Planned
-- [ ] Linux native build
+- [ ] Linux native build (Photino.Blazor)
 - [ ] Android (MAUI)
 - [ ] iOS (PWA/MAUI)
-- [ ] Voice messages (encrypted)
 - [ ] Group video calls (E2E)
-- [ ] Disappearing messages with server-enforced TTL
 - [ ] Hardware key support (YubiKey/FIDO2)
 - [ ] Decentralized room discovery (DHT)
 - [ ] Plugin system for custom security modules

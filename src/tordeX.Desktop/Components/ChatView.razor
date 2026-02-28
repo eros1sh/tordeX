@@ -4,45 +4,51 @@
 @using Microsoft.JSInterop
 @inject ChatService Chat
 @inject IJSRuntime JS
+@implements IDisposable
 
 <!-- Pinned Messages Bar -->
 @if (_pinnedMessages.Count > 0)
 {
-    <div class="pinned-bar" @onclick="() => _showPinnedList = !_showPinnedList">
+    <div class="flex items-center gap-2 px-4 py-2 border-b border-[var(--border)] bg-[var(--bg-secondary)] cursor-pointer hover:bg-[var(--bg-hover)] transition-colors"
+         @onclick="() => _showPinnedList = !_showPinnedList">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
             <path d="M6 1v4M4 5h4l1 3H3l1-3zM6 8v3" stroke="var(--accent)" stroke-width="1" stroke-linecap="round"/>
         </svg>
-        <span>@_pinnedMessages.Count pinned message(s)</span>
+        <span class="text-[12px] text-[var(--text-secondary)]">@_pinnedMessages.Count pinned message(s)</span>
     </div>
 }
 
 <!-- Search Bar -->
 @if (_showSearch)
 {
-    <div class="search-bar">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M10 10l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <div class="flex items-center gap-2 px-4 py-2 border-b border-[var(--border)] bg-[var(--bg-secondary)]">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
-        <input type="text" class="search-input" placeholder="Search messages..."
+        <input type="text" placeholder="Search messages..." autofocus
+               class="flex-1 bg-transparent text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none"
                @bind="_searchQuery" @bind:event="oninput" @onkeydown="HandleSearchKeyDown" />
-        <span style="font-size: 11px; color: var(--text-muted);">@_searchResults.Count results</span>
-        <button class="btn-icon" style="width: 24px; height: 24px;" @onclick="CloseSearch">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <span class="text-[11px] text-[var(--text-muted)]">@_searchResults.Count results</span>
+        <button class="p-1 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer bg-transparent border-none"
+                @onclick="CloseSearch">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
         </button>
     </div>
 }
 
-<div class="chat-header">
-    <div style="display: flex; align-items: center; gap: 12px;">
-        <span class="chat-header-title">@Room.Name</span>
+<!-- Chat Header -->
+<div class="flex items-center justify-between px-5 py-3 border-b border-[var(--border)] bg-[var(--bg-secondary)]">
+    <div class="flex items-center gap-3">
+        <h2 class="text-[16px] font-semibold text-[var(--text-primary)]">@Room.Name</h2>
         @if (!string.IsNullOrEmpty(Room.Description))
         {
-            <span style="font-size: 11px; color: var(--text-muted);">@Room.Description</span>
+            <span class="text-[11px] text-[var(--text-muted)]">@Room.Description</span>
         }
-        <span class="encryption-badge">
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-[var(--radius-sm)] bg-[rgba(46,204,113,0.1)] text-[var(--success)] text-[11px] font-medium">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
@@ -50,20 +56,23 @@
             E2E
         </span>
     </div>
-    <div style="display: flex; gap: 4px; align-items: center;">
-        <button class="btn-icon" title="@L("Bookmarks")" @onclick="() => _showBookmarks = !_showBookmarks">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <div class="flex items-center gap-1">
+        <button class="p-2 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer bg-transparent border-none"
+                title="@L("Bookmarks")" @onclick="() => _showBookmarks = !_showBookmarks">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
             </svg>
         </button>
-        <button class="btn-icon" title="@L("SearchMessages")" @onclick="() => _showSearch = !_showSearch">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <button class="p-2 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer bg-transparent border-none"
+                title="@L("SearchMessages")" @onclick="() => _showSearch = !_showSearch">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="11" cy="11" r="8"/>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
         </button>
-        <button class="btn-icon" title="@L("RoomInformation")" @onclick="ToggleRoomInfo">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <button class="p-2 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer bg-transparent border-none"
+                title="@L("RoomInformation")" @onclick="ToggleRoomInfo">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"/>
                 <line x1="12" y1="16" x2="12" y2="12"/>
                 <line x1="12" y1="8" x2="12.01" y2="8"/>
@@ -72,242 +81,267 @@
     </div>
 </div>
 
-<div class="chat-messages" @ref="_messagesContainer" id="chat-messages"
+<!-- Message List -->
+<div class="flex-1 overflow-y-auto px-5 py-4" @ref="_messagesContainer" id="chat-messages"
      @ondragenter="HandleDragEnter" @ondragleave="HandleDragLeave" @ondragover:preventDefault
      @ondrop="HandleDrop" @ondrop:preventDefault>
     @if (_displayMessages.Count == 0)
     {
-        <div class="empty-state">
-            <svg viewBox="0 0 64 64" fill="none" width="48" height="48">
-                <rect x="1" y="20" width="36" height="28" rx="4" stroke="currentColor" stroke-width="2"/>
-                <path d="M3 28h36" stroke="currentColor" stroke-width="2"/>
-                <circle cx="21" cy="38" r="4" stroke="currentColor" stroke-width="2"/>
+        <div class="flex flex-col items-center justify-center h-full gap-3">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.5;">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                <rect x="8" y="9" width="8" height="6" rx="1"/>
             </svg>
-            <h3>Start Chatting</h3>
-            <p>Messages are end-to-end encrypted with AES-256-GCM.</p>
+            <p class="text-[14px] font-semibold text-[var(--text-muted)]">Start Chatting</p>
+            <p class="text-[12px] text-[var(--text-muted)]">Messages are end-to-end encrypted with AES-256-GCM.</p>
         </div>
     }
     else
     {
-        @foreach (var msg in _displayMessages)
-        {
-            @if (msg.Type == MessageType.System)
+        <div class="flex flex-col">
+            @foreach (var msg in _displayMessages)
             {
-                <div style="display: flex; justify-content: center; padding: 8px 0;">
-                    <span style="font-size: 11px; color: var(--text-muted); padding: 4px 12px; border-radius: var(--radius-full); background: var(--bg-tertiary);">@msg.Content</span>
-                </div>
-            }
-            else if (msg.IsDeleted)
-            {
-                <div class="message-group @(msg.IsOwn ? "own" : "other")">
-                    <div class="message-bubble deleted-message">
-                        <em>This message was deleted</em>
+                @if (msg.Type == MessageType.System)
+                {
+                    <div class="flex justify-center py-2">
+                        <span class="text-[11px] text-[var(--text-muted)] px-3 py-1 rounded-full bg-[var(--bg-tertiary)]">@msg.Content</span>
                     </div>
-                    <div class="message-time">@msg.Timestamp.ToLocalTime().ToString("HH:mm")</div>
-                </div>
-            }
-            else
-            {
-                <div class="message-group @(msg.IsOwn ? "own" : "other")"
-                     @oncontextmenu="(e) => ShowContextMenu(e, msg)" @oncontextmenu:preventDefault="true">
-
-                    @if (!msg.IsOwn)
-                    {
-                        <div class="message-sender">
-                            <span class="msg-avatar">@msg.SenderDisplayName[0..1].ToUpper()</span>
-                            @msg.SenderDisplayName
-                            @if (Chat.IsUserBlocked(msg.SenderFingerprint))
+                }
+                else if (msg.IsDeleted)
+                {
+                    <div class="flex py-1 @(msg.IsOwn ? "justify-end" : "justify-start")">
+                        <span class="text-[13px] italic text-[var(--text-muted)]">This message was deleted</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="message-group flex py-1 relative @(msg.IsOwn ? "justify-end" : "justify-start")"
+                         @oncontextmenu="(e) => ShowContextMenu(e, msg)" @oncontextmenu:preventDefault="true">
+                        <div class="max-w-[70%] flex flex-col">
+                            @if (!msg.IsOwn)
                             {
-                                <span style="color: var(--danger); font-size: 10px; margin-left: 4px;">[blocked]</span>
-                            }
-                        </div>
-                    }
-
-                    @if (msg.ReplyToContent is not null)
-                    {
-                        <div class="reply-preview">
-                            <div class="reply-preview-sender">@(msg.ReplyToSenderName ?? "Unknown")</div>
-                            <div class="reply-preview-text">@TruncateText(msg.ReplyToContent, 80)</div>
-                        </div>
-                    }
-
-                    @if (msg.IsPinned)
-                    {
-                        <div class="pin-badge">
-                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                                <path d="M5 1v3M3.5 4h3l.5 2H3l.5-2zM5 6v3" stroke="var(--accent)" stroke-width="0.8" stroke-linecap="round"/>
-                            </svg>
-                            Pinned
-                        </div>
-                    }
-
-                    @if (msg.Type == MessageType.Text)
-                    {
-                        <div class="message-bubble">
-                            <div class="msg-markdown">@((MarkupString)MarkdownService.Render(msg.Content))</div>
-                            @if (msg.EditedAt.HasValue)
-                            {
-                                <span class="edited-badge">(@L("Edited"))</span>
-                            }
-                        </div>
-                        @if (GetFirstUrl(msg.Content) is string firstUrl)
-                        {
-                            <div class="link-preview" @onclick="() => OpenUrl(firstUrl)">
-                                <div class="link-preview-info">
-                                    <div class="link-preview-title">@L("LinkPreview")</div>
-                                    <div class="link-preview-url">@firstUrl</div>
-                                </div>
-                            </div>
-                        }
-                    }
-                    else if (msg.Type == MessageType.Image)
-                    {
-                        <div class="message-bubble">
-                            @if (msg.IsViewOnce)
-                            {
-                                <div class="view-once-badge">👁 @L("ViewOnce")</div>
-                            }
-                            @if (msg.IsViewOnce && msg.ViewedAt.HasValue && !msg.IsOwn)
-                            {
-                                <div class="view-once-overlay">
-                                    <span>👁 @L("ViewOnceOpened")</span>
-                                </div>
-                            }
-                            else if (msg.IsViewOnce && !msg.ViewedAt.HasValue && !msg.IsOwn)
-                            {
-                                <div class="view-once-blur" @onclick="() => OpenViewOnce(msg)">
-                                    <div class="view-once-overlay">
-                                        <span>👁 @L("ViewOnce")</span>
-                                    </div>
-                                </div>
-                            }
-                            else if (_imageCache.TryGetValue(msg.Content, out var imgSrc))
-                            {
-                                <img src="@imgSrc" class="inline-image" alt="@(msg.FileName ?? "Image")"
-                                     @onclick="() => ShowImageFullscreen(imgSrc)" />
-                            }
-                            else
-                            {
-                                <div class="file-attachment" @onclick="() => LoadImagePreview(msg)">
-                                    <div class="file-icon">📷</div>
-                                    <div>
-                                        <div class="file-name">@(msg.FileName ?? "Image")</div>
-                                        <div class="file-size">@FormatFileSize(msg.FileSize ?? 0) - Click to load</div>
-                                    </div>
-                                </div>
-                            }
-                        </div>
-                    }
-                    else if (msg.Type == MessageType.Video)
-                    {
-                        <div class="message-bubble">
-                            <div class="file-attachment">
-                                <div class="file-icon">🎬</div>
-                                <div>
-                                    <div class="file-name">@(msg.FileName ?? "Video")</div>
-                                    <div class="file-size">@FormatFileSize(msg.FileSize ?? 0) - Encrypted</div>
-                                </div>
-                            </div>
-                        </div>
-                    }
-                    else if (msg.Type == MessageType.Voice)
-                    {
-                        <div class="message-bubble">
-                            <div class="voice-message">
-                                <button class="voice-play-btn" @onclick="() => PlayVoice(msg)">
-                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                                        <path d="M4 3l9 5-9 5V3z" fill="currentColor"/>
-                                    </svg>
-                                </button>
-                                <div class="voice-waveform">
-                                    @for (int i = 0; i < 20; i++)
+                                <div class="flex items-center gap-1.5 mb-1 px-1">
+                                    <span class="w-5 h-5 rounded-full bg-[var(--accent-glow)] text-[var(--accent)] text-[10px] font-bold flex items-center justify-center shrink-0">@msg.SenderDisplayName[0..1].ToUpper()</span>
+                                    <span class="text-[12px] font-semibold text-[var(--accent-light)]">@msg.SenderDisplayName</span>
+                                    @if (Chat.IsUserBlocked(msg.SenderFingerprint))
                                     {
-                                        <div class="voice-bar" style="height: @(8 + Random.Shared.Next(16))px;"></div>
+                                        <span class="text-[10px] text-[var(--danger)]">[blocked]</span>
                                     }
                                 </div>
-                                <span class="voice-duration">@FormatDuration(msg.VoiceDuration ?? 0)</span>
-                            </div>
-                        </div>
-                    }
-                    else if (msg.Type == MessageType.File)
-                    {
-                        <div class="message-bubble">
-                            <div class="file-attachment">
-                                <div class="file-icon">📄</div>
-                                <div>
-                                    <div class="file-name">@(msg.FileName ?? "File")</div>
-                                    <div class="file-size">@FormatFileSize(msg.FileSize ?? 0) - Encrypted</div>
+                            }
+
+                            @if (msg.IsPinned)
+                            {
+                                <div class="flex items-center gap-1 mb-1 px-1">
+                                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                                        <path d="M5 1v3M3.5 4h3l.5 2H3l.5-2zM5 6v3" stroke="var(--accent)" stroke-width="0.8" stroke-linecap="round"/>
+                                    </svg>
+                                    <span class="text-[10px] text-[var(--text-muted)]">Pinned</span>
                                 </div>
+                            }
+
+                            @if (msg.ReplyToContent is not null)
+                            {
+                                <div class="flex items-stretch mb-1.5 rounded-[var(--radius-sm)] overflow-hidden bg-[var(--bg-hover)]">
+                                    <div class="w-[3px] bg-[var(--accent)] shrink-0"></div>
+                                    <div class="px-2 py-1.5 min-w-0">
+                                        <p class="text-[11px] font-semibold text-[var(--accent-light)] truncate">@(msg.ReplyToSenderName ?? "Unknown")</p>
+                                        <p class="text-[11px] text-[var(--text-muted)] truncate">@TruncateText(msg.ReplyToContent, 80)</p>
+                                    </div>
+                                </div>
+                            }
+
+                            @if (msg.Type == MessageType.Text)
+                            {
+                                <div class="@(msg.IsOwn ? "px-3.5 py-2 rounded-[var(--radius-lg)] rounded-br-[var(--radius-sm)] bg-[var(--accent-dark)] text-[#fff]" : "px-3.5 py-2 rounded-[var(--radius-lg)] rounded-bl-[var(--radius-sm)] bg-[var(--bg-tertiary)] text-[var(--text-primary)]")">
+                                    <div class="msg-markdown text-[13px] leading-relaxed whitespace-pre-wrap break-words">@((MarkupString)MarkdownService.Render(msg.Content))</div>
+                                    @if (msg.EditedAt.HasValue)
+                                    {
+                                        <span class="text-[10px] opacity-50 ml-1">(@L("Edited"))</span>
+                                    }
+                                </div>
+                                @if (GetFirstUrl(msg.Content) is string firstUrl)
+                                {
+                                    <div class="link-preview mt-1.5 cursor-pointer" @onclick="() => OpenUrl(firstUrl)">
+                                        <div class="link-preview-info">
+                                            <div class="link-preview-title">@L("LinkPreview")</div>
+                                            <div class="link-preview-url">@firstUrl</div>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else if (msg.Type == MessageType.Image)
+                            {
+                                <div class="@(msg.IsOwn ? "px-3.5 py-2 rounded-[var(--radius-lg)] rounded-br-[var(--radius-sm)] bg-[var(--accent-dark)] text-[#fff]" : "px-3.5 py-2 rounded-[var(--radius-lg)] rounded-bl-[var(--radius-sm)] bg-[var(--bg-tertiary)] text-[var(--text-primary)]")">
+                                    @if (msg.IsViewOnce)
+                                    {
+                                        <div class="view-once-badge">👁 @L("ViewOnce")</div>
+                                    }
+                                    @if (msg.IsViewOnce && msg.ViewedAt.HasValue && !msg.IsOwn)
+                                    {
+                                        <div class="view-once-overlay">
+                                            <span>👁 @L("ViewOnceOpened")</span>
+                                        </div>
+                                    }
+                                    else if (msg.IsViewOnce && !msg.ViewedAt.HasValue && !msg.IsOwn)
+                                    {
+                                        <div class="view-once-blur" @onclick="() => OpenViewOnce(msg)">
+                                            <div class="view-once-overlay">
+                                                <span>👁 @L("ViewOnce")</span>
+                                            </div>
+                                        </div>
+                                    }
+                                    else if (_imageCache.TryGetValue(msg.Content, out var imgSrc))
+                                    {
+                                        <div class="mb-1.5 rounded-[var(--radius-sm)] overflow-hidden cursor-pointer">
+                                            <img src="@imgSrc" class="inline-image" alt="@(msg.FileName ?? "Image")"
+                                                 @onclick="() => ShowImageFullscreen(imgSrc)" />
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="flex items-center gap-2.5 p-2 rounded-[var(--radius-sm)] bg-[rgba(0,0,0,0.2)] cursor-pointer" @onclick="() => LoadImagePreview(msg)">
+                                            <span class="text-[20px]">📷</span>
+                                            <div class="flex-1 min-w-0">
+                                                <p class="text-[12px] font-semibold truncate">@(msg.FileName ?? "Image")</p>
+                                                <span class="text-[10px] opacity-70">@FormatFileSize(msg.FileSize ?? 0) - Click to load</span>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else if (msg.Type == MessageType.Video)
+                            {
+                                <div class="@(msg.IsOwn ? "px-3.5 py-2 rounded-[var(--radius-lg)] rounded-br-[var(--radius-sm)] bg-[var(--accent-dark)] text-[#fff]" : "px-3.5 py-2 rounded-[var(--radius-lg)] rounded-bl-[var(--radius-sm)] bg-[var(--bg-tertiary)] text-[var(--text-primary)]")">
+                                    <div class="flex items-center gap-2.5 p-2 rounded-[var(--radius-sm)] bg-[rgba(0,0,0,0.2)]">
+                                        <span class="text-[20px]">🎬</span>
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-[12px] font-semibold truncate">@(msg.FileName ?? "Video")</p>
+                                            <div class="flex items-center gap-2 mt-0.5">
+                                                <span class="text-[10px] opacity-70">@FormatFileSize(msg.FileSize ?? 0)</span>
+                                                <span class="text-[10px] px-1.5 py-0.5 rounded-[var(--radius-sm)] bg-[rgba(46,204,113,0.15)] text-[var(--success)]">Encrypted</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                            else if (msg.Type == MessageType.Voice)
+                            {
+                                <div class="@(msg.IsOwn ? "px-3.5 py-2 rounded-[var(--radius-lg)] rounded-br-[var(--radius-sm)] bg-[var(--accent-dark)] text-[#fff]" : "px-3.5 py-2 rounded-[var(--radius-lg)] rounded-bl-[var(--radius-sm)] bg-[var(--bg-tertiary)] text-[var(--text-primary)]")">
+                                    <div class="voice-message">
+                                        <button class="voice-play-btn" @onclick="() => PlayVoice(msg)">
+                                            @if (_playingMessageId == msg.Id)
+                                            {
+                                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                                    <rect x="3" y="3" width="4" height="10" rx="1" fill="currentColor"/>
+                                                    <rect x="9" y="3" width="4" height="10" rx="1" fill="currentColor"/>
+                                                </svg>
+                                            }
+                                            else
+                                            {
+                                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                                    <path d="M4 3l9 5-9 5V3z" fill="currentColor"/>
+                                                </svg>
+                                            }
+                                        </button>
+                                        <div class="voice-waveform">
+                                            @for (int i = 0; i < 20; i++)
+                                            {
+                                                <div class="voice-bar" style="height: @(8 + Random.Shared.Next(16))px;@(_playingMessageId == msg.Id ? " background: var(--accent);" : "")"></div>
+                                            }
+                                        </div>
+                                        <span class="voice-duration">@FormatDuration(msg.VoiceDuration ?? 0)</span>
+                                    </div>
+                                </div>
+                            }
+                            else if (msg.Type == MessageType.File)
+                            {
+                                <div class="@(msg.IsOwn ? "px-3.5 py-2 rounded-[var(--radius-lg)] rounded-br-[var(--radius-sm)] bg-[var(--accent-dark)] text-[#fff]" : "px-3.5 py-2 rounded-[var(--radius-lg)] rounded-bl-[var(--radius-sm)] bg-[var(--bg-tertiary)] text-[var(--text-primary)]")">
+                                    <div class="flex items-center gap-2.5 p-2 rounded-[var(--radius-sm)] bg-[rgba(0,0,0,0.2)]">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="@(msg.IsOwn ? "#fff" : "var(--text-secondary)")" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                            <polyline points="14 2 14 8 20 8"/>
+                                        </svg>
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-[12px] font-semibold truncate">@(msg.FileName ?? "File")</p>
+                                            <div class="flex items-center gap-2 mt-0.5">
+                                                <span class="text-[10px] opacity-70">@FormatFileSize(msg.FileSize ?? 0)</span>
+                                                <span class="text-[10px] px-1.5 py-0.5 rounded-[var(--radius-sm)] bg-[rgba(46,204,113,0.15)] text-[var(--success)]">Encrypted</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
+                            @* ── Reactions Bar ── *@
+                            @if (msg.Reactions is not null && msg.Reactions.Count > 0)
+                            {
+                                <div class="flex items-center gap-1 mt-1 px-1">
+                                    @foreach (var reaction in msg.Reactions)
+                                    {
+                                        var isOwn = reaction.Value.Contains(Chat.CurrentUser?.Id ?? "");
+                                        <button class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] rounded-full border cursor-pointer bg-transparent @(isOwn ? "border-[var(--accent)] bg-[var(--accent-glow)]" : "border-[var(--border)] bg-[var(--bg-tertiary)]")"
+                                                @onclick="() => ToggleReaction(msg, reaction.Key)">
+                                            <span>@reaction.Key</span>
+                                            <span class="text-[var(--text-secondary)]">@reaction.Value.Count</span>
+                                        </button>
+                                    }
+                                    <button class="reaction-add-btn" @onclick="() => ShowReactionPicker(msg)">+</button>
+                                </div>
+                            }
+
+                            <div class="flex items-center gap-1 mt-1 px-1 @(msg.IsOwn ? "justify-end" : "justify-start")"
+                                 style="@(Chat.CurrentUser?.ShowTimestamps == false ? "display: none;" : "")">
+                                <span class="text-[11px] text-[var(--text-muted)]">@msg.Timestamp.ToLocalTime().ToString("HH:mm")</span>
+                                @if (msg.IsOwn)
+                                {
+                                    <span class="text-[11px] @(msg.IsRead ? "text-[var(--accent)]" : "text-[var(--text-muted)]")">
+                                        @if (msg.IsRead)
+                                        { <text>✓✓</text> }
+                                        else if (msg.IsDelivered)
+                                        { <text>✓</text> }
+                                    </span>
+                                }
+                                @if (msg.SelfDestructAt.HasValue)
+                                {
+                                    <span class="text-[11px]" title="Self-destructs">⏱️</span>
+                                }
                             </div>
-                        </div>
-                    }
 
-                    @* ── Reactions Bar ── *@
-                    @if (msg.Reactions is not null && msg.Reactions.Count > 0)
-                    {
-                        <div class="reaction-bar">
-                            @foreach (var reaction in msg.Reactions)
+                            <!-- Hover actions -->
+                            <div class="message-actions">
+                                <button class="msg-action-btn" title="@L("AddReaction")" @onclick="() => ShowReactionPicker(msg)">😊</button>
+                                <button class="msg-action-btn" title="@L("Reply")" @onclick="() => StartReply(msg)">↩</button>
+                                <button class="msg-action-btn @(msg.IsBookmarked ? "active" : "")"
+                                        title="@L("Bookmark")" @onclick="() => ToggleBookmark(msg)">🔖</button>
+                                @if (msg.IsOwn)
+                                {
+                                    <button class="msg-action-btn" title="@L("Edit")" @onclick="() => StartEdit(msg)">✏</button>
+                                    <button class="msg-action-btn" title="@L("Delete")" @onclick="() => DeleteMessage(msg)">🗑</button>
+                                }
+                                <button class="msg-action-btn" title="@L("Forward")" @onclick="() => StartForward(msg)">↗</button>
+                                <button class="msg-action-btn" title="@(msg.IsPinned ? L("Unpin") : L("Pin"))" @onclick="() => TogglePin(msg)">📌</button>
+                                @if (!msg.IsOwn)
+                                {
+                                    <button class="msg-action-btn" title="@L("BlockUser")" @onclick="() => BlockSender(msg)">🚫</button>
+                                }
+                            </div>
+
+                            @* ── Reaction Quick Picker ── *@
+                            @if (_reactionPickerTarget?.Id == msg.Id)
                             {
-                                var isOwn = reaction.Value.Contains(Chat.CurrentUser?.Id ?? "");
-                                <button class="reaction-pill @(isOwn ? "own" : "")"
-                                        @onclick="() => ToggleReaction(msg, reaction.Key)">
-                                    <span>@reaction.Key</span>
-                                    <span class="reaction-count">@reaction.Value.Count</span>
-                                </button>
-                            }
-                            <button class="reaction-add-btn" @onclick="() => ShowReactionPicker(msg)">+</button>
-                        </div>
-                    }
-
-                    <div class="message-meta @(Chat.CurrentUser?.ShowTimestamps == false ? "timestamp-hidden" : "")">
-                        <span class="message-time">@msg.Timestamp.ToLocalTime().ToString("HH:mm")</span>
-                        @if (msg.IsOwn)
-                        {
-                            <span class="read-receipt @(msg.IsRead ? "read" : msg.IsDelivered ? "delivered" : "")">
-                                @if (msg.IsRead)
-                                { <text>✓✓</text> }
-                                else if (msg.IsDelivered)
-                                { <text>✓</text> }
-                            </span>
-                        }
-                        @if (msg.SelfDestructAt.HasValue)
-                        {
-                            <span class="self-destruct-badge" title="Self-destructs">⏱️</span>
-                        }
-                    </div>
-
-                    <!-- Hover actions -->
-                    <div class="message-actions">
-                        <button class="msg-action-btn" title="@L("AddReaction")" @onclick="() => ShowReactionPicker(msg)">😊</button>
-                        <button class="msg-action-btn" title="@L("Reply")" @onclick="() => StartReply(msg)">↩</button>
-                        <button class="msg-action-btn bookmark-icon @(msg.IsBookmarked ? "active" : "")"
-                                title="@L("Bookmark")" @onclick="() => ToggleBookmark(msg)">🔖</button>
-                        @if (msg.IsOwn)
-                        {
-                            <button class="msg-action-btn" title="@L("Edit")" @onclick="() => StartEdit(msg)">✏</button>
-                            <button class="msg-action-btn" title="@L("Delete")" @onclick="() => DeleteMessage(msg)">🗑</button>
-                        }
-                        <button class="msg-action-btn" title="@L("Forward")" @onclick="() => StartForward(msg)">↗</button>
-                        <button class="msg-action-btn" title="@(msg.IsPinned ? L("Unpin") : L("Pin"))" @onclick="() => TogglePin(msg)">📌</button>
-                        @if (!msg.IsOwn)
-                        {
-                            <button class="msg-action-btn" title="@L("BlockUser")" @onclick="() => BlockSender(msg)">🚫</button>
-                        }
-                    </div>
-
-                    @* ── Reaction Quick Picker ── *@
-                    @if (_reactionPickerTarget?.Id == msg.Id)
-                    {
-                        <div class="reaction-picker-mini">
-                            @foreach (var emoji in _quickReactions)
-                            {
-                                <button @onclick="() => AddReaction(msg, emoji)">@emoji</button>
+                                <div class="reaction-picker-mini">
+                                    @foreach (var emoji in _quickReactions)
+                                    {
+                                        <button @onclick="() => AddReaction(msg, emoji)">@emoji</button>
+                                    }
+                                </div>
                             }
                         </div>
-                    }
-                </div>
+                    </div>
+                }
             }
-        }
+        </div>
     }
 </div>
 
@@ -363,68 +397,83 @@
 <!-- Forward Dialog -->
 @if (_showForwardDialog)
 {
-    <div class="modal-backdrop" @onclick="() => _showForwardDialog = false">
-        <div class="modal" @onclick:stopPropagation="true">
-            <div class="modal-title">Forward Message</div>
-            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Select a room to forward to:</p>
+    <div class="fixed inset-0 z-[1000] flex items-center justify-center" @onclick="() => _showForwardDialog = false">
+        <div class="absolute inset-0 bg-[rgba(0,0,0,0.7)]"></div>
+        <div class="relative w-full max-w-[420px] rounded-[var(--radius-lg)] bg-[var(--bg-secondary)] border border-[var(--border)] p-6"
+             style="box-shadow: var(--shadow-lg); animation: slideUp 250ms ease;"
+             @onclick:stopPropagation="true">
+            <h3 class="text-[16px] font-semibold text-[var(--text-primary)] mb-4">Forward Message</h3>
+            <p class="text-[12px] text-[var(--text-muted)] mb-3">Select a room to forward to:</p>
             @foreach (var room in _allRooms.Where(r => r.Id != Room.Id))
             {
-                <button class="forward-room-item" @onclick="() => ForwardToRoom(room)">
-                    <span class="room-icon">@room.Name[0..1].ToUpper()</span>
-                    @room.Name
+                <button class="w-full flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-md)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer bg-transparent border-none text-left mb-1"
+                        @onclick="() => ForwardToRoom(room)">
+                    <span class="w-8 h-8 rounded-[var(--radius-md)] bg-[var(--accent-glow)] text-[var(--accent)] text-[12px] font-bold flex items-center justify-center shrink-0">@room.Name[0..1].ToUpper()</span>
+                    <span class="text-[13px] text-[var(--text-primary)]">@room.Name</span>
                 </button>
             }
-            <button class="btn-secondary" style="margin-top: 12px;" @onclick="() => _showForwardDialog = false">Cancel</button>
+            <button class="w-full h-9 mt-3 rounded-[var(--radius-md)] border border-[var(--border-light)] bg-transparent text-[var(--text-secondary)] text-[13px] cursor-pointer transition-colors duration-200 hover:bg-[var(--bg-hover)]"
+                    @onclick="() => _showForwardDialog = false">Cancel</button>
         </div>
     </div>
 }
 
 <!-- Input Area -->
-<div class="chat-input-area">
+<div class="border-t border-[var(--border)] bg-[var(--bg-secondary)]">
     @if (_replyingTo is not null)
     {
-        <div class="reply-bar">
-            <div style="flex: 1; min-width: 0;">
-                <div class="reply-bar-sender">Replying to @_replyingTo.SenderDisplayName</div>
-                <div class="reply-bar-text">@TruncateText(_replyingTo.Content, 60)</div>
+        <div class="flex items-stretch px-4 pt-3">
+            <div class="w-[3px] rounded-full bg-[var(--accent)] shrink-0"></div>
+            <div class="flex-1 flex items-center justify-between px-3 py-2 rounded-r-[var(--radius-sm)] bg-[var(--bg-tertiary)]">
+                <div class="min-w-0">
+                    <p class="text-[11px] font-semibold text-[var(--accent-light)]">Replying to @_replyingTo.SenderDisplayName</p>
+                    <p class="text-[11px] text-[var(--text-muted)] truncate">@TruncateText(_replyingTo.Content, 60)</p>
+                </div>
+                <button class="p-1 ml-2 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer bg-transparent border-none shrink-0"
+                        @onclick="CancelReply">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
             </div>
-            <button class="btn-icon" style="width: 24px; height: 24px;" @onclick="CancelReply">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-            </button>
         </div>
     }
 
     @if (_editingMessage is not null)
     {
-        <div class="reply-bar" style="border-left-color: var(--warning);">
-            <div style="flex: 1;">
-                <div class="reply-bar-sender" style="color: var(--warning);">Editing message</div>
+        <div class="flex items-stretch px-4 pt-3">
+            <div class="w-[3px] rounded-full bg-[var(--warning)] shrink-0"></div>
+            <div class="flex-1 flex items-center justify-between px-3 py-2 rounded-r-[var(--radius-sm)] bg-[var(--bg-tertiary)]">
+                <div class="min-w-0">
+                    <p class="text-[11px] font-semibold text-[var(--warning)]">Editing message</p>
+                </div>
+                <button class="p-1 ml-2 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer bg-transparent border-none shrink-0"
+                        @onclick="CancelEdit">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
             </div>
-            <button class="btn-icon" style="width: 24px; height: 24px;" @onclick="CancelEdit">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-            </button>
         </div>
     }
 
     @if (_selectedFileName is not null)
     {
-        <div style="padding: 4px 0 8px 0; display: flex; align-items: center; gap: 8px;">
-            <div class="file-attachment" style="flex: 1; margin: 0;">
-                <div class="file-icon">📎</div>
-                <div style="flex: 1; min-width: 0;">
-                    <div class="file-name">@_selectedFileName</div>
-                    <div class="file-size">@FormatFileSize(_selectedFileSize)</div>
-                </div>
-                <button class="btn-icon" style="width: 24px; height: 24px;" @onclick="CancelFileUpload">
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                        <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                    </svg>
-                </button>
+        <div class="flex items-center gap-2.5 mx-4 mt-2 p-3 rounded-[var(--radius-md)] bg-[var(--bg-tertiary)] border border-[var(--border)]">
+            <span class="text-[20px]">📎</span>
+            <div class="flex-1 min-w-0">
+                <p class="text-[12px] font-semibold text-[var(--text-primary)] truncate">@_selectedFileName</p>
+                <span class="text-[11px] text-[var(--text-muted)]">@FormatFileSize(_selectedFileSize)</span>
             </div>
+            <button class="p-1 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer bg-transparent border-none"
+                    @onclick="CancelFileUpload">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
         </div>
     }
 
@@ -436,41 +485,103 @@
     <!-- Self-destruct toggle -->
     @if (_selfDestructEnabled)
     {
-        <div style="padding: 4px 8px; font-size: 11px; color: var(--warning); display: flex; align-items: center; gap: 6px;">
-            <span>⏱️ Self-destruct: @_selfDestructSeconds s</span>
-            <input type="range" min="5" max="300" step="5" @bind="_selfDestructSeconds" style="flex:1; max-width: 120px;" />
-            <button class="btn-icon" style="width: 20px; height: 20px; font-size: 10px;" @onclick="() => _selfDestructEnabled = false">✕</button>
+        <div class="flex items-center gap-3 mx-4 mt-2 px-3 py-2 rounded-[var(--radius-sm)] bg-[rgba(243,156,18,0.1)] border border-[rgba(243,156,18,0.3)]">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <span class="text-[12px] text-[var(--warning)] font-medium">Self-destruct: @_selfDestructSeconds s</span>
+            <input type="range" min="5" max="300" step="5" @bind="_selfDestructSeconds"
+                   class="flex-1 h-1 accent-[var(--warning)]" />
+            <button class="p-1 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer bg-transparent border-none"
+                    @onclick="() => _selfDestructEnabled = false">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
         </div>
     }
 
-    <div class="chat-input-container">
-        <button class="btn-icon" title="Emoji" @onclick="() => _showEmojiPicker = !_showEmojiPicker">
-            😊
-        </button>
+    <!-- Voice recording bar -->
+    @if (_isRecording)
+    {
+        <div class="flex items-center gap-2.5 mx-4 mt-2 px-3 py-2 rounded-[var(--radius-md)] bg-[var(--bg-tertiary)]">
+            <div class="w-2 h-2 rounded-full bg-[var(--danger)]" style="animation: pulseDot 1s infinite;"></div>
+            <span class="text-[13px] text-[var(--danger)] font-medium">Recording</span>
+            <span class="text-[13px] text-[var(--text-secondary)]" style="font-family: var(--font-mono);">@FormatDuration(_recordingElapsed)</span>
+            <div class="flex-1"></div>
+            <button class="p-1.5 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer bg-transparent border-none text-[var(--text-muted)]"
+                    title="Cancel" @onclick="CancelVoiceRecording">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+            </button>
+            <button class="p-1.5 rounded-full bg-[var(--accent-glow)] text-[var(--accent)] transition-colors cursor-pointer border-none"
+                    title="Send voice" @onclick="StopVoiceRecording">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M14 2L6 10M14 2l-4 12-2-5-5-2 11-7z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+        </div>
+    }
 
-        <label class="btn-icon" title="Attach file" style="cursor: pointer;">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <path d="M15 9.5l-6.4 6.4a3.5 3.5 0 01-5-5L10 4.5a2.33 2.33 0 013.3 3.3L7 14.2a1.17 1.17 0 01-1.7-1.7l5.7-5.7"
-                      stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-            <InputFile OnChange="HandleFileSelected" style="display: none;" accept="*/*" />
-        </label>
+    <!-- Input Container (matches Next.js ChatInput) -->
+    <div class="flex items-end gap-2 p-3">
+        <div class="flex items-center gap-0.5">
+            <button class="p-2 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer bg-transparent border-none"
+                    title="Emoji" @onclick="() => _showEmojiPicker = !_showEmojiPicker">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                    <line x1="9" y1="9" x2="9.01" y2="9"/>
+                    <line x1="15" y1="9" x2="15.01" y2="9"/>
+                </svg>
+            </button>
 
-        <button class="btn-icon" title="Self-destruct timer" @onclick="() => _selfDestructEnabled = !_selfDestructEnabled">
-            ⏱️
-        </button>
+            <label class="p-2 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer bg-transparent border-none inline-flex items-center justify-center"
+                   title="Attach file">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                </svg>
+                <InputFile OnChange="HandleFileSelected" style="display: none;" accept="*/*" />
+            </label>
 
-        <textarea class="chat-input" rows="1" placeholder="Type a message..."
-                  @bind="_messageText" @bind:event="oninput"
-                  @onkeydown="HandleKeyDown"
-                  @onpaste="HandlePaste"></textarea>
+            <button class="p-2 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer bg-transparent border-none"
+                    style="@(_selfDestructEnabled ? "color: var(--warning);" : "")"
+                    title="Self-destruct timer" @onclick="() => _selfDestructEnabled = !_selfDestructEnabled">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="@(_selfDestructEnabled ? "var(--warning)" : "var(--text-secondary)")" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+            </button>
 
-        <button class="btn-icon btn-send" @onclick="SendMessage"
+            <button class="p-2 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer bg-transparent border-none"
+                    style="@(_isRecording ? "color: var(--danger);" : "")"
+                    title="Voice message" @onclick="StartVoiceRecording" disabled="@_isRecording">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="22"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="flex-1 flex items-end rounded-[var(--radius-lg)] bg-[var(--bg-tertiary)] border border-[var(--border)] focus-within:border-[var(--accent)] focus-within:shadow-[0_0_0_3px_var(--accent-glow)] transition-all duration-200 px-3 py-2">
+            <textarea class="flex-1 bg-transparent text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none resize-none leading-relaxed"
+                      rows="1" placeholder="Type a message..." style="max-height: 120px;"
+                      @bind="_messageText" @bind:event="oninput"
+                      @onkeydown="HandleKeyDown"
+                      @onpaste="HandlePaste"></textarea>
+        </div>
+
+        <button class="p-2.5 rounded-full bg-[var(--accent)] text-[#fff] transition-all duration-200 cursor-pointer border-none disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[var(--accent-light)] active:bg-[var(--accent-dark)] shrink-0"
+                @onclick="SendMessage"
                 disabled="@(string.IsNullOrWhiteSpace(_messageText) && _selectedFileData is null)"
                 title="Send (Enter)">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <path d="M16 2L7 11M16 2l-5 14-2-5-5-2 12-7z"
-                      stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
             </svg>
         </button>
     </div>
@@ -479,93 +590,108 @@
 @* ── Bookmarks Panel ── *@
 @if (_showBookmarks)
 {
-    <div class="bookmarks-panel">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <span style="font-weight: 600; font-size: 14px;">🔖 @L("Bookmarks")</span>
-            <button class="btn-icon" style="width: 24px; height: 24px;" @onclick="() => _showBookmarks = false">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <div class="fixed top-0 right-0 w-[340px] h-full z-[900] bg-[var(--bg-secondary)] border-l border-[var(--border)] flex flex-col"
+         style="box-shadow: var(--shadow-lg); animation: slideInRight 250ms ease;">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+            <h3 class="text-[15px] font-semibold text-[var(--text-primary)]">@L("Bookmarks")</h3>
+            <button class="p-1.5 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer bg-transparent border-none"
+                    @onclick="() => _showBookmarks = false">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" stroke-linecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
             </button>
         </div>
-        @if (_bookmarks.Count == 0)
-        {
-            <div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 24px 0;">
-                @L("NoBookmarks")
-            </div>
-        }
-        else
-        {
-            @foreach (var bm in _bookmarks)
+        <!-- Bookmark List -->
+        <div class="flex-1 overflow-y-auto">
+            @if (_bookmarks.Count == 0)
             {
-                <div class="bookmark-item">
-                    <div class="bookmark-item-content">@TruncateText(bm.ContentPreview, 100)</div>
-                    <div class="bookmark-item-meta">
-                        <span class="bookmark-author">@bm.SenderName</span>
-                        <span>@bm.CreatedAt.ToLocalTime().ToString("dd/MM HH:mm")</span>
-                    </div>
+                <div class="text-center text-[var(--text-muted)] text-[13px] py-6">
+                    @L("NoBookmarks")
                 </div>
             }
-        }
+            else
+            {
+                @foreach (var bm in _bookmarks)
+                {
+                    <div class="px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer">
+                        <p class="text-[13px] text-[var(--text-primary)] leading-relaxed">@TruncateText(bm.ContentPreview, 100)</p>
+                        <div class="flex items-center gap-2 mt-1.5">
+                            <span class="text-[11px] text-[var(--accent-light)]">@bm.SenderName</span>
+                            <span class="text-[11px] text-[var(--text-muted)]">@bm.CreatedAt.ToLocalTime().ToString("dd/MM HH:mm")</span>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
     </div>
 }
 
+<!-- Room Info Dialog -->
 @if (_showRoomInfo)
 {
-    <div class="modal-backdrop" @onclick="() => _showRoomInfo = false">
-        <div class="modal" @onclick:stopPropagation="true">
-            <div class="modal-title">Room Information</div>
+    <div class="fixed inset-0 z-[1000] flex items-center justify-center" @onclick="() => _showRoomInfo = false">
+        <div class="absolute inset-0 bg-[rgba(0,0,0,0.7)]"></div>
+        <div class="relative w-full max-w-[420px] rounded-[var(--radius-lg)] bg-[var(--bg-secondary)] border border-[var(--border)] p-6"
+             style="box-shadow: var(--shadow-lg); animation: slideUp 250ms ease;"
+             @onclick:stopPropagation="true">
+            <h3 class="text-[16px] font-semibold text-[var(--text-primary)] mb-4">Room Information</h3>
 
-            <div class="form-group">
-                <label class="form-label">Room ID</label>
-                <input type="text" class="form-input" value="@Room.Id" readonly
-                       style="font-family: var(--font-mono); font-size: 12px; user-select: text;" />
-            </div>
+            <div class="flex flex-col gap-4">
+                <!-- Room ID -->
+                <div class="flex flex-col gap-1">
+                    <label class="text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Room ID</label>
+                    <p class="text-[13px] font-mono text-[var(--text-secondary)] bg-[var(--bg-tertiary)] px-3 py-2 rounded-[var(--radius-sm)]" style="user-select: text;">@Room.Id</p>
+                </div>
 
-            @if (!string.IsNullOrEmpty(Room.Description))
-            {
-                <div class="form-group">
-                    <label class="form-label">Description</label>
-                    <div style="font-size: 13px; color: var(--text-secondary); padding: 8px; background: var(--bg-tertiary); border-radius: var(--radius-md);">
-                        @Room.Description
+                @if (!string.IsNullOrEmpty(Room.Description))
+                {
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Description</label>
+                        <p class="text-[13px] text-[var(--text-secondary)]">@Room.Description</p>
                     </div>
-                </div>
-            }
+                }
 
-            @if (Room.MaxCapacity > 0)
-            {
-                <div class="form-group">
-                    <label class="form-label">Max Capacity</label>
-                    <input type="text" class="form-input" value="@Room.MaxCapacity members" readonly />
-                </div>
-            }
-
-            @if (Room.InviteToken is not null)
-            {
-                <div class="form-group">
-                    <label class="form-label">Invite Link</label>
-                    <div style="display: flex; gap: 6px;">
-                        <input type="text" class="form-input" value="@Chat.GenerateInviteLink(Room)" readonly
-                               style="font-family: var(--font-mono); font-size: 11px; flex: 1;" />
-                        <button class="btn-secondary" style="width: auto; padding: 8px 12px; font-size: 11px;"
-                                @onclick="CopyInviteLink">@(_inviteCopied ? "Copied!" : "Copy")</button>
+                @if (Room.MaxCapacity > 0)
+                {
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Max Capacity</label>
+                        <p class="text-[13px] text-[var(--text-secondary)]">@Room.MaxCapacity members</p>
                     </div>
+                }
+
+                @if (Room.InviteToken is not null)
+                {
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Invite Link</label>
+                        <div class="flex items-center gap-2">
+                            <p class="flex-1 text-[12px] font-mono text-[var(--text-secondary)] bg-[var(--bg-tertiary)] px-3 py-2 rounded-[var(--radius-sm)] truncate" style="user-select: text;">@Chat.GenerateInviteLink(Room)</p>
+                            <button class="px-3 py-2 rounded-[var(--radius-sm)] bg-[var(--bg-tertiary)] border border-[var(--border)] text-[12px] text-[var(--text-secondary)] cursor-pointer hover:bg-[var(--bg-hover)] transition-colors duration-200 whitespace-nowrap"
+                                    @onclick="CopyInviteLink">@(_inviteCopied ? "Copied!" : "Copy")</button>
+                        </div>
+                    </div>
+                }
+
+                <div class="flex flex-col gap-1">
+                    <label class="text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Encryption</label>
+                    <span class="inline-flex w-fit items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-sm)] bg-[rgba(46,204,113,0.1)] text-[var(--success)] text-[12px]">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                        AES-256-GCM + PBKDF2-SHA512 (600K iterations)
+                    </span>
                 </div>
-            }
 
-            <div class="form-group">
-                <label class="form-label">Encryption</label>
-                <div class="encryption-badge" style="margin-top: 4px;">
-                    AES-256-GCM + PBKDF2-SHA512 (600K iterations)
+                <div class="flex flex-col gap-1">
+                    <label class="text-[11px] text-[var(--text-muted)] uppercase tracking-wider font-medium">Messages</label>
+                    <p class="text-[13px] text-[var(--text-secondary)]">@_messages.Count</p>
                 </div>
-            </div>
 
-            <div class="form-group">
-                <label class="form-label">Messages</label>
-                <input type="text" class="form-input" value="@_messages.Count messages" readonly />
+                <button class="w-full h-9 mt-2 rounded-[var(--radius-md)] border border-[var(--border-light)] bg-transparent text-[var(--text-secondary)] text-[13px] cursor-pointer transition-colors duration-200 hover:bg-[var(--bg-hover)]"
+                        @onclick="() => _showRoomInfo = false">Close</button>
             </div>
-
-            <button class="btn-secondary" @onclick="() => _showRoomInfo = false">Close</button>
         </div>
     </div>
 }
@@ -616,11 +742,45 @@
     private ChatMessage? _reactionPickerTarget;
     private static readonly string[] _quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🔥", "👎", "🎉"];
 
+    // Voice recording state
+    private bool _isRecording;
+    private double _recordingElapsed;
+    private DotNetObjectReference<ChatView>? _audioRef;
+
+    // Voice playback
+    private string? _playingMessageId;
+
     protected override async Task OnParametersSetAsync()
     {
         await LoadMessages();
         _allRooms = await Chat.GetRoomsAsync();
         _bookmarks = await Chat.GetBookmarksAsync();
+    }
+
+    protected override void OnInitialized()
+    {
+        Chat.OnMessageReceived += HandleIncomingMessage;
+    }
+
+    private void HandleIncomingMessage(ChatMessage msg)
+    {
+        if (msg.RoomId != Room.Id) return;
+
+        InvokeAsync(() =>
+        {
+            // Avoid duplicates
+            if (_messages.Any(m => m.Id == msg.Id)) return;
+
+            _messages.Add(msg);
+            _displayMessages = _messages;
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        Chat.OnMessageReceived -= HandleIncomingMessage;
+        _audioRef?.Dispose();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -917,10 +1077,83 @@
 
     private void ShowImageFullscreen(string src) => _fullscreenImage = src;
 
-    private Task PlayVoice(ChatMessage msg)
+    // ──── Voice Recording ────
+
+    private async Task StartVoiceRecording()
     {
-        // Voice playback would require JS interop with Web Audio API
-        return Task.CompletedTask;
+        _audioRef ??= DotNetObjectReference.Create(this);
+        var success = await JS.InvokeAsync<bool>("tordeXAudio.startRecording", _audioRef);
+        if (success)
+        {
+            _isRecording = true;
+            _recordingElapsed = 0;
+            StateHasChanged();
+        }
+    }
+
+    private async Task StopVoiceRecording()
+    {
+        if (!_isRecording) return;
+        _isRecording = false;
+        await JS.InvokeVoidAsync("tordeXAudio.stopRecording");
+        StateHasChanged();
+    }
+
+    private async Task CancelVoiceRecording()
+    {
+        if (!_isRecording) return;
+        _isRecording = false;
+        _recordingElapsed = 0;
+        await JS.InvokeVoidAsync("tordeXAudio.cancelRecording");
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnRecordingTick(double elapsed)
+    {
+        _recordingElapsed = elapsed;
+        InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task OnRecordingComplete(string base64Audio, double duration)
+    {
+        try
+        {
+            var audioBytes = Convert.FromBase64String(base64Audio);
+            var message = await Chat.SendVoiceMessageAsync(Room.Id, audioBytes, duration);
+            _messages.Add(message);
+            _displayMessages = _messages;
+        }
+        catch (Exception ex)
+        {
+            AddSystemMessage($"Voice send failed: {ex.Message}");
+        }
+        _recordingElapsed = 0;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // ──── Voice Playback ────
+
+    private async Task PlayVoice(ChatMessage msg)
+    {
+        Chat.ResetActivityTimer();
+        var fileData = await Chat.GetFileAsync(msg.Content, msg.RoomId, msg.FileName);
+        if (fileData is null) return;
+
+        var base64 = Convert.ToBase64String(fileData);
+        _audioRef ??= DotNetObjectReference.Create(this);
+        _playingMessageId = msg.Id;
+        StateHasChanged();
+        await JS.InvokeAsync<bool>("tordeXAudio.playAudio", msg.Id, base64, _audioRef);
+    }
+
+    [JSInvokable]
+    public void OnPlaybackEnded(string messageId)
+    {
+        if (_playingMessageId == messageId)
+            _playingMessageId = null;
+        InvokeAsync(StateHasChanged);
     }
 
     // ──── Room Info ────

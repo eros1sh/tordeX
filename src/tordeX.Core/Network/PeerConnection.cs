@@ -122,6 +122,65 @@ public sealed class PeerConnection : IAsyncDisposable
     }
 
     /// <summary>
+    /// Respond to an incoming handshake (for the listener side).
+    /// Receives the peer's handshake first, then sends ours.
+    /// Returns the room ID from the peer's handshake.
+    /// </summary>
+    public async Task<string> RespondToHandshakeAsync(IdentityManager identity, string displayName, CancellationToken ct = default)
+    {
+        if (!IsConnected || _stream is null)
+            throw new InvalidOperationException("Not connected.");
+
+        // Receive peer's handshake first (they initiated)
+        var peerMsg = await ReceiveRawAsync(ct);
+        if (peerMsg is null || peerMsg.Type != P2PMessageType.Handshake)
+            throw new InvalidOperationException("Invalid handshake from peer.");
+
+        if (!IdentityManager.Verify(peerMsg.Payload, peerMsg.Signature, peerMsg.SenderPublicKey))
+            throw new InvalidOperationException("Handshake signature verification failed.");
+
+        var peerHandshake = MessagePackSerializer.Deserialize<HandshakePayload>(peerMsg.Payload);
+
+        using var keyExchange = new KeyExchange();
+
+        // Send our handshake response
+        var responsePayload = new HandshakePayload
+        {
+            ProtocolVersion = "tordeX/1.0",
+            PublicKey = identity.PublicKey,
+            EphemeralPublicKey = keyExchange.PublicKey,
+            DisplayName = displayName,
+            RoomId = peerHandshake.RoomId
+        };
+
+        var payloadBytes = MessagePackSerializer.Serialize(responsePayload);
+        var signature = identity.Sign(payloadBytes);
+
+        var responseMsg = new P2PMessage
+        {
+            Type = P2PMessageType.Handshake,
+            MessageId = Guid.NewGuid().ToString("N"),
+            RoomId = peerHandshake.RoomId,
+            SenderFingerprint = IdentityManager.ComputeFingerprint(identity.PublicKey),
+            Payload = payloadBytes,
+            Signature = signature,
+            SenderPublicKey = identity.PublicKey
+        };
+
+        await SendRawAsync(responseMsg, ct);
+
+        // Set peer info
+        PeerPublicKey = peerHandshake.PublicKey;
+        PeerFingerprint = IdentityManager.ComputeFingerprint(PeerPublicKey);
+        PeerDisplayName = peerHandshake.DisplayName;
+
+        // Derive shared session key
+        SessionKey = keyExchange.DeriveSharedSecret(peerHandshake.EphemeralPublicKey);
+
+        return peerHandshake.RoomId;
+    }
+
+    /// <summary>
     /// Send an encrypted P2P message.
     /// </summary>
     public async Task SendMessageAsync(P2PMessage message, CancellationToken ct = default)

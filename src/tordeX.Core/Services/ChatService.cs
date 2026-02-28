@@ -18,10 +18,9 @@ public sealed class ChatService : IAsyncDisposable
     private readonly string _dataDirectory;
     private SecureDatabase? _database;
     private TorManager? _torManager;
-    #pragma warning disable CS0649
     private P2PServer? _p2pServer;
-    #pragma warning restore CS0649
     private IdentityManager? _identity;
+    private const int P2PListenPort = 19876;
     private byte[]? _masterKey;
     private UserProfile? _userProfile;
     private bool _disposed;
@@ -275,19 +274,202 @@ public sealed class ChatService : IAsyncDisposable
 
     // ═══════════════ Tor ═══════════════
 
+    public string? OnionAddress => _torManager?.OnionAddress;
+
     public async Task StartTorAsync(CancellationToken ct = default)
     {
         _torManager = new TorManager(Path.Combine(_dataDirectory, "tor"));
         _torManager.ConnectionStatusChanged += status => OnTorStatusChanged?.Invoke(status);
         await _torManager.StartAsync(ct);
+
+        // Start P2P server and create hidden service
+        await StartP2PServerAsync(ct);
     }
 
     public async Task StopTorAsync()
     {
+        if (_p2pServer is not null)
+        {
+            await _p2pServer.StopAsync();
+        }
         if (_torManager is not null)
         {
             await _torManager.StopAsync();
         }
+    }
+
+    // ═══════════════ P2P Server ═══════════════
+
+    private async Task StartP2PServerAsync(CancellationToken ct)
+    {
+        if (_torManager is null || !_torManager.IsRunning)
+            return;
+
+        _p2pServer = new P2PServer(P2PListenPort, _torManager.SocksPort);
+        _p2pServer.PeerConnected += HandleIncomingPeer;
+        await _p2pServer.StartAsync(ct);
+
+        // Create Tor hidden service pointing to our P2P listener
+        try
+        {
+            await _torManager.CreateHiddenServiceAsync(P2PListenPort, ct);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Hidden service creation failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Connect to a remote peer's hidden service for a specific room.
+    /// </summary>
+    public async Task ConnectToRoomPeerAsync(string roomId, string onionAddress, CancellationToken ct = default)
+    {
+        if (_torManager is null || !_torManager.IsRunning || _identity is null || _userProfile is null)
+            return;
+
+        // Don't connect to ourselves
+        if (onionAddress == _torManager.OnionAddress)
+            return;
+
+        // Check if already connected to this peer in this room
+        if (_roomPeers.TryGetValue(roomId, out var existingPeers))
+        {
+            if (existingPeers.Any(p => p.IsConnected))
+                return;
+        }
+
+        var peer = new PeerConnection(onionAddress, P2PListenPort, _torManager.SocksPort);
+
+        try
+        {
+            await peer.ConnectAsync(ct);
+            await peer.HandshakeAsync(_identity, _userProfile.DisplayName, roomId, ct);
+
+            WirePeerEvents(peer, roomId);
+            peer.StartReceiving();
+
+            if (!_roomPeers.ContainsKey(roomId))
+                _roomPeers[roomId] = new List<PeerConnection>();
+            _roomPeers[roomId].Add(peer);
+
+            OnPeerStatusChanged?.Invoke(peer.PeerFingerprint, true);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Peer connection failed: {ex.Message}");
+            await peer.DisposeAsync();
+        }
+    }
+
+    private void HandleIncomingPeer(PeerConnection peer)
+    {
+        // Process async on thread pool to not block the accept loop
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                if (_identity is null || _userProfile is null) return;
+
+                // Respond to handshake (receive first, then send)
+                var roomId = await peer.RespondToHandshakeAsync(
+                    _identity, _userProfile.DisplayName);
+
+                // Verify we have this room and its key
+                if (!_roomKeys.ContainsKey(roomId))
+                {
+                    await peer.DisposeAsync();
+                    return;
+                }
+
+                // Check if peer is blocked
+                if (_blockedUsers.ContainsKey(peer.PeerFingerprint))
+                {
+                    await peer.DisposeAsync();
+                    return;
+                }
+
+                WirePeerEvents(peer, roomId);
+                peer.StartReceiving();
+
+                if (!_roomPeers.ContainsKey(roomId))
+                    _roomPeers[roomId] = new List<PeerConnection>();
+                _roomPeers[roomId].Add(peer);
+
+                OnPeerStatusChanged?.Invoke(peer.PeerFingerprint, true);
+            }
+            catch
+            {
+                try { await peer.DisposeAsync(); } catch { /* best effort */ }
+            }
+        });
+    }
+
+    private void WirePeerEvents(PeerConnection peer, string roomId)
+    {
+        peer.MessageReceived += msg => HandleReceivedP2PMessage(msg);
+        peer.Disconnected += disconnectedPeer =>
+        {
+            if (_roomPeers.TryGetValue(roomId, out var peerList))
+                peerList.Remove(disconnectedPeer);
+            OnPeerStatusChanged?.Invoke(disconnectedPeer.PeerFingerprint, false);
+        };
+    }
+
+    private void HandleReceivedP2PMessage(P2PMessage msg)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                if (msg.Type != P2PMessageType.ChatMessage) return;
+                if (!_roomKeys.TryGetValue(msg.RoomId, out var roomKey)) return;
+                if (_blockedUsers.ContainsKey(msg.SenderFingerprint)) return;
+
+                // Verify signature
+                if (!IdentityManager.Verify(msg.Payload, msg.Signature, msg.SenderPublicKey))
+                    return;
+
+                // Decrypt payload
+                var decryptedPayload = MessageEncryption.Decrypt(msg.Payload, roomKey);
+                var msgData = MessagePackSerializer.Deserialize<ChatMessagePayload>(decryptedPayload);
+
+                var chatMessage = new ChatMessage
+                {
+                    Id = msgData.Id,
+                    RoomId = msg.RoomId,
+                    SenderFingerprint = msgData.SenderFingerprint,
+                    SenderDisplayName = msgData.SenderDisplayName,
+                    Type = (MessageType)msgData.Type,
+                    Content = msgData.Content,
+                    FileName = msgData.FileName,
+                    FileSize = msgData.FileSize,
+                    MimeType = msgData.MimeType,
+                    Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(msgData.Timestamp),
+                    IsOwn = false,
+                    ReplyToId = msgData.ReplyToId,
+                    ReplyToContent = msgData.ReplyToContent,
+                    ReplyToSenderName = msgData.ReplyToSenderName,
+                    SelfDestructSeconds = msgData.SelfDestructSeconds,
+                    SelfDestructAt = msgData.SelfDestructSeconds.HasValue
+                        ? DateTimeOffset.UtcNow.AddSeconds(msgData.SelfDestructSeconds.Value)
+                        : null,
+                    VoiceDuration = msgData.VoiceDuration,
+                    IsDelivered = true,
+                };
+
+                // Save to local database
+                if (_database is not null)
+                    await _database.SaveMessageAsync(msg.RoomId, chatMessage, roomKey);
+
+                // Notify UI
+                OnMessageReceived?.Invoke(chatMessage);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"P2P message handling failed: {ex.Message}");
+            }
+        });
     }
 
     // ═══════════════ Rooms ═══════════════
@@ -297,13 +479,17 @@ public sealed class ChatService : IAsyncDisposable
     {
         EnsureInitialized();
 
-        var roomSalt = SecureRandom.GenerateBytes(32);
+        var roomId = SecureRandom.GenerateHex(16);
+
+        // Deterministic salt — both creator and joiner derive same key from same roomId + password
+        var saltInput = Encoding.UTF8.GetBytes($"tordeX-room-salt-v1:{roomId}");
+        var roomSalt = System.Security.Cryptography.SHA256.HashData(saltInput);
         var roomKey = KeyDerivation.DeriveRoomKey(password, roomSalt);
         var inviteToken = SecureRandom.GenerateHex(16);
 
         var room = new ChatRoom
         {
-            Id = SecureRandom.GenerateHex(16),
+            Id = roomId,
             Name = name,
             RoomSalt = roomSalt,
             CreatedAt = DateTimeOffset.UtcNow,
@@ -311,6 +497,7 @@ public sealed class ChatService : IAsyncDisposable
             Description = description,
             MaxCapacity = maxCapacity,
             InviteToken = inviteToken,
+            OnionAddress = _torManager?.OnionAddress,
         };
 
         await _database!.SaveRoomAsync(room, ct);
@@ -369,8 +556,9 @@ public sealed class ChatService : IAsyncDisposable
 
     public string GenerateInviteLink(ChatRoom room)
     {
-        // Format: tordex://join/<roomId>/<inviteToken>
-        return $"tordex://join/{room.Id}/{room.InviteToken ?? SecureRandom.GenerateHex(16)}";
+        // Format: tordex://join/<roomId>/<inviteToken>/<onionAddress>
+        var onion = room.OnionAddress ?? _torManager?.OnionAddress ?? "";
+        return $"tordex://join/{room.Id}/{room.InviteToken ?? SecureRandom.GenerateHex(16)}/{onion}";
     }
 
     // ═══════════════ Messages ═══════════════
@@ -839,23 +1027,24 @@ public sealed class ChatService : IAsyncDisposable
 
         var roomKey = _roomKeys[roomId];
 
-        var payload = MessagePackSerializer.Serialize(new
+        var chatPayload = new ChatMessagePayload
         {
-            message.Id,
-            message.SenderFingerprint,
-            message.SenderDisplayName,
+            Id = message.Id,
+            SenderFingerprint = message.SenderFingerprint,
+            SenderDisplayName = message.SenderDisplayName,
             Type = (int)message.Type,
-            message.Content,
-            message.FileName,
-            message.FileSize,
-            message.MimeType,
+            Content = message.Content,
+            FileName = message.FileName,
+            FileSize = message.FileSize,
+            MimeType = message.MimeType,
             Timestamp = message.Timestamp.ToUnixTimeMilliseconds(),
-            message.ReplyToId,
-            message.ReplyToContent,
-            message.ReplyToSenderName,
-            message.SelfDestructSeconds,
-            message.VoiceDuration,
-        });
+            ReplyToId = message.ReplyToId,
+            ReplyToContent = message.ReplyToContent,
+            ReplyToSenderName = message.ReplyToSenderName,
+            SelfDestructSeconds = message.SelfDestructSeconds,
+            VoiceDuration = message.VoiceDuration,
+        };
+        var payload = MessagePackSerializer.Serialize(chatPayload);
 
         var encryptedPayload = MessageEncryption.Encrypt(payload, roomKey);
         var signature = _identity.Sign(encryptedPayload);
