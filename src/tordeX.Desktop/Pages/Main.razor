@@ -1,0 +1,100 @@
+@using TordeX.Core.Services
+@inject ChatService Chat
+
+@if (!_isLoggedIn)
+{
+    <LoginPage OnLoggedIn="HandleLoggedIn" />
+}
+else if (Chat.IsLocked)
+{
+    <!-- Auto-Lock Overlay -->
+    <div class="auto-lock-overlay">
+        <div class="auto-lock-card">
+            <div class="auto-lock-icon">
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                    <rect x="8" y="22" width="32" height="22" rx="4" stroke="var(--accent)" stroke-width="2.5"/>
+                    <path d="M16 22V16a8 8 0 0116 0v6" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round"/>
+                    <circle cx="24" cy="33" r="3" fill="var(--accent)"/>
+                </svg>
+            </div>
+            <div class="auto-lock-title">tordeX Locked</div>
+            <div class="auto-lock-subtitle">Enter your password to unlock</div>
+            <input type="password" class="auto-lock-input" placeholder="Password"
+                   @bind="_unlockPassword" @bind:event="oninput"
+                   @onkeydown="HandleLockKeyDown" />
+            @if (!string.IsNullOrEmpty(_lockError))
+            {
+                <div class="auto-lock-error">@_lockError</div>
+            }
+            <div class="auto-lock-hint">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="vertical-align: middle;">
+                    <rect x="1" y="5" width="10" height="6" rx="1.5" stroke="currentColor" stroke-width="1"/>
+                    <path d="M3.5 5V3.5a2.5 2.5 0 015 0V5" stroke="currentColor" stroke-width="1"/>
+                </svg>
+                Locked due to inactivity
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <MainLayout />
+}
+
+@code {
+    private bool _isLoggedIn;
+    private string _unlockPassword = string.Empty;
+    private string _lockError = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        _isLoggedIn = Chat.IsInitialized;
+        Chat.OnAutoLocked += HandleAutoLocked;
+    }
+
+    private void HandleLoggedIn()
+    {
+        _isLoggedIn = true;
+        StateHasChanged();
+    }
+
+    private void HandleAutoLocked()
+    {
+        _unlockPassword = string.Empty;
+        _lockError = string.Empty;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HandleLockKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await TryUnlock();
+    }
+
+    private async Task TryUnlock()
+    {
+        _lockError = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_unlockPassword))
+        {
+            _lockError = "Password is required.";
+            return;
+        }
+
+        var ok = await Chat.UnlockAppAsync(_unlockPassword);
+        if (!ok)
+        {
+            _lockError = "Invalid password. Please try again.";
+            _unlockPassword = string.Empty;
+            return;
+        }
+
+        _unlockPassword = string.Empty;
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        Chat.OnAutoLocked -= HandleAutoLocked;
+    }
+}

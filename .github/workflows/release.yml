@@ -1,0 +1,101 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build -c Release --no-restore
+
+      - name: Test
+        run: dotnet test src/tordeX.Tests/tordeX.Tests.csproj -c Release --no-build --verbosity normal
+
+      - name: Publish (Self-Contained Single File)
+        run: |
+          dotnet publish src/tordeX.Desktop/tordeX.Desktop.csproj `
+            -c Release `
+            --self-contained `
+            -r win-x64 `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            -o publish
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=v${{ inputs.version }}" >> $GITHUB_OUTPUT
+            echo "name=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "name=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create ZIP archive
+        shell: pwsh
+        run: |
+          $publishDir = "publish"
+          $zipName = "tordeX-${{ steps.version.outputs.name }}-win-x64.zip"
+
+          # Include wwwroot alongside EXE
+          Compress-Archive -Path "$publishDir\*" -DestinationPath $zipName -Force
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: tordeX ${{ steps.version.outputs.tag }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## tordeX ${{ steps.version.outputs.tag }}
+
+            Decentralized E2E encrypted messenger over Tor.
+
+            ### Installation
+            1. Download `tordeX-${{ steps.version.outputs.name }}-win-x64.zip`
+            2. Extract to any folder
+            3. Run `tordeX.exe`
+            4. Tor binaries are downloaded automatically on first launch
+
+            ### Requirements
+            - Windows 10 (build 19041) or later
+            - WebView2 Runtime (pre-installed on Windows 10/11)
+
+            ### Security
+            - 32 security/privacy features enabled
+            - AES-256-GCM + Double Ratchet forward secrecy
+            - All traffic routed through Tor onion v3
+            - SQLCipher encrypted local database
+          files: |
+            tordeX-${{ steps.version.outputs.name }}-win-x64.zip
+            publish/tordeX.exe

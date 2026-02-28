@@ -1,0 +1,1415 @@
+@using TordeX.Core.Models
+@using TordeX.Core.Services
+@inject ChatService Chat
+
+<div class="app-layout">
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <img src="img/logo.png" alt="tordeX" />
+            <h1>tordeX</h1>
+            <div style="margin-left: auto;">
+                <button class="btn-icon" title="@L("Settings")" @onclick="() => OpenSettings()">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                        <circle cx="9" cy="9" r="2" stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M9 1v2M9 15v2M1 9h2M15 9h2M3.3 3.3l1.4 1.4M13.3 13.3l1.4 1.4M3.3 14.7l1.4-1.4M13.3 4.7l1.4-1.4"
+                              stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Tor Status Banner -->
+        <div style="padding: 8px 12px; border-bottom: 1px solid var(--border);">
+            @if (_torConnecting)
+            {
+                <div class="tor-status connecting" style="width: 100%; justify-content: center;">
+                    <div class="status-dot connecting"></div>
+                    @L("ConnectingToTor")
+                </div>
+            }
+            else if (Chat.IsTorConnected)
+            {
+                <div class="tor-status connected" style="width: 100%; justify-content: center;">
+                    <div class="status-dot online"></div>
+                    @L("TorConnected")
+                </div>
+            }
+            else if (_torError is not null)
+            {
+                <div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">
+                    <div class="tor-status" style="color: var(--danger); width: 100%; justify-content: center;">
+                        <div class="status-dot offline"></div>
+                        @L("TorFailed")
+                    </div>
+                    <button class="btn-tor-connect" style="font-size: 11px; padding: 4px 10px;" @onclick="ConnectTor">
+                        @L("RetryConnection")
+                    </button>
+                </div>
+            }
+            else
+            {
+                <button class="btn-tor-connect" @onclick="ConnectTor">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.5"/>
+                        <circle cx="7" cy="7" r="3" stroke="currentColor" stroke-width="1"/>
+                        <circle cx="7" cy="7" r="0.5" fill="currentColor"/>
+                    </svg>
+                    @L("ConnectToTorNetwork")
+                </button>
+            }
+        </div>
+
+        <div class="sidebar-content">
+            @if (_rooms.Count == 0)
+            {
+                <div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px;">
+                    <p>@L("NoRoomsYet")</p>
+                    <p style="margin-top: 4px;">@L("CreateOrJoinRoom")</p>
+                </div>
+            }
+            else
+            {
+                @foreach (var room in _rooms)
+                {
+                    <div class="room-item @(room.Id == _selectedRoomId ? "active" : "")"
+                         @onclick="() => SelectRoom(room)"
+                         @oncontextmenu="(e) => ShowRoomContextMenu(e, room)" @oncontextmenu:preventDefault="true">
+                        <div class="room-icon">@(room.Name.Length > 0 ? room.Name[0].ToString().ToUpper() : "?")</div>
+                        <div class="room-info">
+                            <div class="room-name">@room.Name</div>
+                            <div class="room-preview">
+                                @if (_roomPasswords.ContainsKey(room.Id))
+                                {
+                                    <span class="encryption-badge">@L("Unlocked")</span>
+                                }
+                                else
+                                {
+                                    <span style="font-size: 11px; color: var(--text-muted);">
+                                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="vertical-align: middle;">
+                                            <rect x="1" y="4.5" width="8" height="5" rx="1" stroke="currentColor" stroke-width="1"/>
+                                            <path d="M3 4.5V3a2 2 0 014 0v1.5" stroke="currentColor" stroke-width="1"/>
+                                        </svg>
+                                        @L("Locked")
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                        @if (room.UnreadCount > 0)
+                        {
+                            <span class="room-badge">@room.UnreadCount</span>
+                        }
+                    </div>
+                }
+            }
+        </div>
+
+        <div class="sidebar-actions">
+            <button class="btn-new-room" @onclick="ShowCreateRoomDialog">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                @L("NewRoom")
+            </button>
+            <button class="btn-secondary" style="margin-top: 6px;" @onclick="ShowJoinRoomDialog">
+                @L("JoinRoom")
+            </button>
+        </div>
+
+        <div class="user-section">
+            <div class="avatar avatar-sm" title="@Chat.CurrentUser?.DisplayName">
+                @if (Chat.CurrentUser?.AvatarData is { Length: > 0 })
+                {
+                    <img src="data:image/png;base64,@Convert.ToBase64String(Chat.CurrentUser.AvatarData)" alt="avatar" />
+                }
+                else
+                {
+                    @(Chat.CurrentUser?.DisplayName.Length > 0 ? Chat.CurrentUser.DisplayName[0].ToString().ToUpper() : "?")
+                }
+            </div>
+            <div style="min-width: 0; flex: 1;">
+                <div class="user-name">@Chat.CurrentUser?.DisplayName</div>
+                <div class="user-fingerprint">@Chat.UserFingerprint</div>
+            </div>
+            <button class="btn-icon" style="margin-left: 4px;" title="Lock" @onclick="LockApp">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <rect x="2" y="6" width="10" height="7" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
+                    <path d="M4.5 6V4.5a2.5 2.5 0 015 0V6" stroke="currentColor" stroke-width="1.2"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        @if (_selectedRoom is not null && _roomPasswords.ContainsKey(_selectedRoom.Id))
+        {
+            <ChatView Room="_selectedRoom" RoomPassword="_selectedRoomPassword" />
+        }
+        else
+        {
+            <div class="empty-state">
+                <img src="img/logo.png" alt="tordeX" style="width: 80px; height: 80px; opacity: 0.2;" />
+                <h3>@L("WelcomeMessage")</h3>
+                <p>@L("WelcomeSubtext")</p>
+                <div style="margin-top: 16px; display: flex; gap: 8px;">
+                    <button class="btn-primary" style="width: auto; padding: 10px 24px;" @onclick="ShowCreateRoomDialog">
+                        @L("NewRoom")
+                    </button>
+                    <button class="btn-secondary" style="width: auto; padding: 10px 24px;" @onclick="ShowJoinRoomDialog">
+                        @L("JoinRoom")
+                    </button>
+                </div>
+            </div>
+        }
+
+        <div class="status-bar">
+            <div class="status-dot @(Chat.IsTorConnected ? "online" : "offline")"></div>
+            <span>Tor: @(Chat.IsTorConnected ? "Connected" : "Disconnected")</span>
+            <span style="margin-left: auto;">
+                <span class="encryption-badge">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                        <rect x="1" y="4.5" width="8" height="5" rx="1" stroke="currentColor" stroke-width="1"/>
+                        <path d="M3 4.5V3a2 2 0 014 0v1.5" stroke="currentColor" stroke-width="1"/>
+                    </svg>
+                    @L("EndToEndEncrypted")
+                </span>
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- Room Password Dialog -->
+@if (_showRoomPassword)
+{
+    <div class="modal-backdrop" @onclick="CloseDialogs">
+        <div class="modal" @onclick:stopPropagation="true">
+            <div class="modal-title">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style="vertical-align: middle; margin-right: 8px;">
+                    <rect x="3" y="8" width="12" height="8" rx="2" stroke="var(--accent)" stroke-width="1.5"/>
+                    <path d="M6 8V6a3 3 0 016 0v2" stroke="var(--accent)" stroke-width="1.5"/>
+                </svg>
+                @L("UnlockRoom")
+            </div>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+                @L("EnterPasswordFor") <strong style="color: var(--text-primary);">@_unlockRoomTarget?.Name</strong>
+            </p>
+
+            <div class="form-group">
+                <label class="form-label">@L("RoomPassword")</label>
+                <input type="password" class="form-input" placeholder="@L("RoomPassword")"
+                       @bind="_unlockPassword" @bind:event="oninput"
+                       @onkeydown="HandleUnlockKeyDown" />
+            </div>
+
+            @if (!string.IsNullOrEmpty(_dialogError))
+            {
+                <div class="form-error">@_dialogError</div>
+            }
+
+            <button class="btn-primary" @onclick="UnlockRoom">@L("Unlock")</button>
+            <button class="btn-secondary" @onclick="CloseDialogs">@L("Cancel")</button>
+        </div>
+    </div>
+}
+
+<!-- Create Room Dialog -->
+@if (_showCreateRoom)
+{
+    <div class="modal-backdrop" @onclick="CloseDialogs">
+        <div class="modal" @onclick:stopPropagation="true">
+            <div class="modal-title">@L("CreateNewRoom")</div>
+
+            <div class="form-group">
+                <label class="form-label">@L("RoomName")</label>
+                <input type="text" class="form-input" placeholder="My Secret Room"
+                       @bind="_newRoomName" @bind:event="oninput" maxlength="64" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">@L("RoomDescription")</label>
+                <input type="text" class="form-input" placeholder="Optional description..."
+                       @bind="_newRoomDescription" @bind:event="oninput" maxlength="256" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">@L("RoomPassword")</label>
+                <input type="password" class="form-input" placeholder="Strong shared password"
+                       @bind="_newRoomPassword" @bind:event="oninput" />
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                    @L("SharePasswordHint")
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">@L("MaxCapacity")</label>
+                <input type="number" class="form-input" min="0" max="1000" placeholder="0 = unlimited"
+                       @bind="_newRoomCapacity" @bind:event="oninput" />
+            </div>
+
+            @if (!string.IsNullOrEmpty(_dialogError))
+            {
+                <div class="form-error">@_dialogError</div>
+            }
+
+            <button class="btn-primary" @onclick="CreateRoom" disabled="@_dialogLoading">
+                @(_dialogLoading ? "Creating..." : L("CreateNewRoom"))
+            </button>
+            <button class="btn-secondary" @onclick="CloseDialogs">@L("Cancel")</button>
+        </div>
+    </div>
+}
+
+<!-- Join Room Dialog -->
+@if (_showJoinRoom)
+{
+    <div class="modal-backdrop" @onclick="CloseDialogs">
+        <div class="modal" @onclick:stopPropagation="true">
+            <div class="modal-title">@L("JoinRoom")</div>
+
+            <div class="form-group">
+                <label class="form-label">@L("RoomId")</label>
+                <input type="text" class="form-input" placeholder="@L("PasteRoomId")"
+                       @bind="_joinRoomId" @bind:event="oninput" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">@L("RoomName")</label>
+                <input type="text" class="form-input" placeholder="@L("RoomDisplayName")"
+                       @bind="_joinRoomName" @bind:event="oninput" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">@L("RoomPassword")</label>
+                <input type="password" class="form-input" placeholder="@L("RoomSharedPassword")"
+                       @bind="_joinRoomPassword" @bind:event="oninput" />
+            </div>
+
+            @if (!string.IsNullOrEmpty(_dialogError))
+            {
+                <div class="form-error">@_dialogError</div>
+            }
+
+            <button class="btn-primary" @onclick="JoinRoom" disabled="@_dialogLoading">
+                @(_dialogLoading ? "Joining..." : L("JoinRoom"))
+            </button>
+            <button class="btn-secondary" @onclick="CloseDialogs">@L("Cancel")</button>
+        </div>
+    </div>
+}
+
+<!-- Delete Room Confirm -->
+@if (_showDeleteConfirm)
+{
+    <div class="modal-backdrop" @onclick="CloseDialogs">
+        <div class="modal" @onclick:stopPropagation="true">
+            <div class="modal-title" style="color: var(--danger);">@L("DeleteRoom")</div>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+                @L("ConfirmDeleteRoom") <strong style="color: var(--text-primary);">@_deleteRoomTarget?.Name</strong>?
+                @L("PermanentDeleteWarning")
+            </p>
+
+            <button class="btn-primary" style="background: var(--danger);" @onclick="ConfirmDeleteRoom">
+                @L("DeleteRoom")
+            </button>
+            <button class="btn-secondary" @onclick="CloseDialogs">@L("Cancel")</button>
+        </div>
+    </div>
+}
+
+<!-- Settings Dialog (Full Featured) -->
+@if (_showSettings)
+{
+    <div class="modal-backdrop" @onclick="CloseDialogs">
+        <div class="modal" style="max-width: 480px; max-height: 85vh; overflow-y: auto;" @onclick:stopPropagation="true">
+            <div class="modal-title">@L("Settings")</div>
+
+            <!-- Profile Section -->
+            <div class="settings-section">
+                <div class="settings-section-title">Profile</div>
+
+                <div class="form-group">
+                    <label class="form-label">@L("DisplayName")</label>
+                    <input type="text" class="form-input" @bind="_settingsDisplayName" @bind:event="oninput" maxlength="32" />
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">@L("YourFingerprint")</label>
+                    <input type="text" class="form-input" value="@Chat.UserFingerprint" readonly
+                           style="font-family: var(--font-mono); font-size: 12px; user-select: text;" />
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                        @L("FingerprintDescription")
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">@L("PublicKey")</label>
+                    <input type="text" class="form-input"
+                           value="@(Chat.CurrentUser is not null ? Convert.ToBase64String(Chat.CurrentUser.PublicKey)[..40] + "..." : "")"
+                           readonly style="font-family: var(--font-mono); font-size: 11px; user-select: text;" />
+                </div>
+            </div>
+
+            <!-- Language Section -->
+            <div class="settings-section">
+                <div class="settings-section-title">@L("Language")</div>
+                <div class="language-selector">
+                    <select class="language-select" @onchange="OnLanguageChanged" value="@_settingsLanguage">
+                        <option value="en">English</option>
+                        <option value="tr">Turkce</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Security Section -->
+            <div class="settings-section">
+                <div class="settings-section-title">@L("SecurityInfo")</div>
+
+                <div style="font-size: 12px; color: var(--text-secondary); padding: 8px; background: var(--bg-tertiary); border-radius: var(--radius-md); margin-bottom: 12px;">
+                    <div style="margin-bottom: 4px;"><strong>@L("Encryption"):</strong> AES-256-GCM</div>
+                    <div style="margin-bottom: 4px;"><strong>@L("KeyDerivation"):</strong> PBKDF2-SHA512 (600K iterations)</div>
+                    <div style="margin-bottom: 4px;"><strong>@L("KeyExchange"):</strong> ECDH P-256 + HKDF</div>
+                    <div style="margin-bottom: 4px;"><strong>@L("Signatures"):</strong> ECDSA P-256</div>
+                    <div><strong>@L("Network"):</strong> Tor SOCKS5 Onion Routing</div>
+                </div>
+
+                <!-- Auto-Lock -->
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <div class="settings-item-label">@L("AutoLock")</div>
+                        <div class="settings-item-desc">
+                            @if (_settingsAutoLock > 0)
+                            {
+                                @($"{_settingsAutoLock} {L("Minutes")}")
+                            }
+                            else
+                            {
+                                @L("Never")
+                            }
+                        </div>
+                    </div>
+                    <select class="language-select" style="width: 120px;" @bind="_settingsAutoLock">
+                        <option value="0">@L("Never")</option>
+                        <option value="1">1 min</option>
+                        <option value="5">5 min</option>
+                        <option value="15">15 min</option>
+                        <option value="30">30 min</option>
+                        <option value="60">60 min</option>
+                    </select>
+                </div>
+
+                <!-- Notification Sounds -->
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <div class="settings-item-label">@L("NotificationSounds")</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" @bind="_settingsNotifSounds" />
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <!-- Screen Capture Protection -->
+                <div class="settings-item">
+                    <div class="settings-item-info">
+                        <div class="settings-item-label">@L("ScreenCaptureProtection")</div>
+                        <div class="settings-item-desc">Window appears black in screenshots</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" @bind="_settingsScreenCapture" />
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- ═══════ SECURITY & PRIVACY DASHBOARD ═══════ -->
+            <div class="settings-section">
+                <div class="settings-section-title">@L("CryptoSettings")</div>
+
+                <div class="security-toggle">
+                    <div class="security-toggle-info">
+                        <div class="security-toggle-label">@L("DoubleRatchet")</div>
+                        <div class="security-toggle-desc">@L("DoubleRatchetDesc")</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" @bind="_secDoubleRatchet" />
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="security-toggle">
+                    <div class="security-toggle-info">
+                        <div class="security-toggle-label">@L("PostQuantum")</div>
+                        <div class="security-toggle-desc">@L("PostQuantumDesc")</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" @bind="_secPostQuantum" />
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="security-toggle">
+                    <div class="security-toggle-info">
+                        <div class="security-toggle-label">@L("MultiLayerEncryption")</div>
+                        <div class="security-toggle-desc">@L("MultiLayerEncryptionDesc")</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" @bind="_secMultiLayer" />
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="security-toggle">
+                    <div class="security-toggle-info">
+                        <div class="security-toggle-label">@L("DeniableEncryption")</div>
+                        <div class="security-toggle-desc">@L("DeniableEncryptionDesc")</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" @bind="_secDeniable" />
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-section-title">@L("NetworkSecurity")</div>
+
+                <div class="security-toggle">
+                    <div class="security-toggle-info">
+                        <div class="security-toggle-label">@L("TrafficObfuscation")</div>
+                        <div class="security-toggle-desc">@L("TrafficObfuscationDesc")</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" @bind="_secTrafficObf" />
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="security-toggle">
+                    <div class="security-toggle-info">
+                        <div class="security-toggle-label">@L("TimingProtection")</div>
+                        <div class="security-toggle-desc">@L("TimingProtectionDesc")</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" @bind="_secTiming" />
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="security-toggle">
+                    <div class="security-toggle-info">
+                        <div class="security-toggle-label">@L("DnsLeakProtection")</div>
+                        <div class="security-toggle-desc">@L("DnsLeakProtectionDesc")</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" @bind="_secDnsLeak" />
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="security-toggle">
+                    <div class="security-toggle-info">
+                        <div class="security-toggle-label">@L("CertificatePinning")</div>
+                        <div class="security-toggle-desc">@L("CertificatePinningDesc")</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" @bind="_secCertPinning" />
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <!-- Tor Bridge Config -->
+                <div class="security-toggle" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                    <div class="security-toggle-info">
+                        <div class="security-toggle-label">@L("TorBridge")</div>
+                        <div class="security-toggle-desc">@L("TorBridgeDesc")</div>
+                    </div>
+                    <input type="text" class="form-input bridge-input" placeholder="obfs4 IP:PORT FINGERPRINT..."
+                           @bind="_secBridgeLine" style="font-size: 11px;" />
+                    <div class="transport-selector">
+                        @{ var transports = new[] { "obfs4", "meek", "snowflake" }; }
+                        @foreach (var t in transports)
+                        {
+                            <button class="@GetTransportBtnClass(t)" @onclick="() => ToggleTransport(t)">@t</button>
+                        }
+                    </div>
+                </div>
+
+                <!-- Guard Node Pinning -->
+                <div class="security-toggle" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                    <div class="security-toggle-info">
+                        <div class="security-toggle-label">@L("GuardPinning")</div>
+                        <div class="security-toggle-desc">@L("GuardPinningDesc")</div>
+                    </div>
+                    <input type="text" class="form-input bridge-input" placeholder="$FINGERPRINT1,$FINGERPRINT2,..."
+                           @bind="_secGuardNodes" style="font-size: 11px;" />
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-section-title">@L("DataProtection")</div>
+
+                <div class="security-toggle">
+                    <div class="security-toggle-info">
+                        <div class="security-toggle-label">@L("RamOnlyMode")</div>
+                        <div class="security-toggle-desc">@L("RamOnlyModeDesc")</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" @bind="_secRamOnly" />
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                @if (_secRamOnly)
+                {
+                    <div class="ram-only-warning">
+                        ⚠ Messages will be lost when you close the app
+                    </div>
+                }
+
+                <div class="security-toggle">
+                    <div class="security-toggle-info">
+                        <div class="security-toggle-label">@L("AutoMetadataStrip")</div>
+                        <div class="security-toggle-desc">@L("AutoMetadataStripDesc")</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" @bind="_secAutoMeta" />
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="security-toggle">
+                    <div class="security-toggle-info">
+                        <div class="security-toggle-label">@L("MemoryProtection")</div>
+                        <div class="security-toggle-desc">@L("MemoryProtectionDesc")</div>
+                    </div>
+                    <span class="security-badge active">DPAPI</span>
+                </div>
+
+                <div class="security-toggle">
+                    <div class="security-toggle-info">
+                        <div class="security-toggle-label">@L("SecureWipe")</div>
+                        <div class="security-toggle-desc">@L("SecureWipeDesc")</div>
+                    </div>
+                    <span class="security-badge active">DoD 5220</span>
+                </div>
+
+                <!-- Dead Man's Switch -->
+                <div class="security-toggle" style="flex-direction: column; align-items: stretch; gap: 8px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                        <div class="security-toggle-info">
+                            <div class="security-toggle-label">@L("DeadManSwitch")</div>
+                            <div class="security-toggle-desc">@L("DeadManSwitchDesc")</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" @bind="_secDeadMan" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    @if (_secDeadMan)
+                    {
+                        <div class="dead-man-config">
+                            <div class="dead-man-days">
+                                @L("DeadManSwitchDays"):
+                                <input type="number" min="1" max="365" @bind="_secDeadManDays" />
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-section-title">@L("ThreatMonitoring")</div>
+
+                <div class="security-toggle">
+                    <div class="security-toggle-info">
+                        <div class="security-toggle-label">@L("TamperDetection")</div>
+                        <div class="security-toggle-desc">@L("TamperDetectionDesc")</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" @bind="_secTamper" />
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="security-toggle">
+                    <div class="security-toggle-info">
+                        <div class="security-toggle-label">@L("IntegrityMonitoring")</div>
+                        <div class="security-toggle-desc">@L("IntegrityMonitoringDesc")</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" @bind="_secIntegrity" />
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="security-toggle">
+                    <div class="security-toggle-info">
+                        <div class="security-toggle-label">@L("CanaryTokens")</div>
+                        <div class="security-toggle-desc">@L("CanaryTokensDesc")</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" @bind="_secCanary" />
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="security-toggle">
+                    <div class="security-toggle-info">
+                        <div class="security-toggle-label">@L("BruteForceProtection")</div>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="number" min="3" max="20" @bind="_secMaxAttempts" style="width: 50px; padding: 4px 6px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 12px; text-align: center;" />
+                        <span style="font-size: 11px; color: var(--text-muted);">@L("MaxLoginAttempts")</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Change Password Section -->
+            <div class="settings-section">
+                <div class="settings-section-title">@L("ChangePassword")</div>
+                @if (!_showPasswordChange)
+                {
+                    <button class="btn-secondary" style="width: 100%; margin-top: 0;" @onclick="() => _showPasswordChange = true">
+                        @L("ChangePassword")
+                    </button>
+                }
+                else
+                {
+                    <div class="password-change-form">
+                        <div class="form-group">
+                            <label class="form-label">@L("CurrentPassword")</label>
+                            <input type="password" class="form-input" @bind="_pwdCurrent" @bind:event="oninput" />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">@L("NewPassword")</label>
+                            <input type="password" class="form-input" @bind="_pwdNew" @bind:event="oninput" />
+                            @{ var strength = GetPasswordStrength(_pwdNew); }
+                            <div class="password-strength">
+                                <div class="password-strength-bar @(strength >= 1 ? $"filled {GetStrengthClass(strength)}" : "")"></div>
+                                <div class="password-strength-bar @(strength >= 2 ? $"filled {GetStrengthClass(strength)}" : "")"></div>
+                                <div class="password-strength-bar @(strength >= 3 ? $"filled {GetStrengthClass(strength)}" : "")"></div>
+                                <div class="password-strength-bar @(strength >= 4 ? $"filled {GetStrengthClass(strength)}" : "")"></div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">@L("ConfirmNewPassword")</label>
+                            <input type="password" class="form-input" @bind="_pwdConfirm" @bind:event="oninput" />
+                            @if (!string.IsNullOrEmpty(_pwdConfirm))
+                            {
+                                <div class="password-match-indicator @(_pwdNew == _pwdConfirm ? "match" : "no-match")">
+                                    @(_pwdNew == _pwdConfirm ? "Passwords match" : "Passwords do not match")
+                                </div>
+                            }
+                        </div>
+                        @if (!string.IsNullOrEmpty(_pwdError))
+                        {
+                            <div class="form-error">@_pwdError</div>
+                        }
+                        @if (!string.IsNullOrEmpty(_pwdSuccess))
+                        {
+                            <div style="font-size: 12px; color: var(--success);">@_pwdSuccess</div>
+                        }
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-primary" style="flex: 1;" @onclick="ChangePassword" disabled="@_pwdLoading">
+                                @(_pwdLoading ? "Changing..." : L("Save"))
+                            </button>
+                            <button class="btn-secondary" style="flex: 1; margin-top: 0;" @onclick="() => _showPasswordChange = false">
+                                @L("Cancel")
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Blocked Users Section -->
+            <div class="settings-section">
+                <div class="settings-section-title">@L("BlockedUsers")</div>
+                @if (_blockedUsers.Count == 0)
+                {
+                    <div style="font-size: 13px; color: var(--text-muted); padding: 8px 0;">
+                        @L("NoBlockedUsers")
+                    </div>
+                }
+                else
+                {
+                    @foreach (var blocked in _blockedUsers)
+                    {
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border);">
+                            <div>
+                                <div style="font-size: 13px; color: var(--text-primary);">@(blocked.DisplayName ?? "Unknown")</div>
+                                <div style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">@blocked.Fingerprint[..16]...</div>
+                            </div>
+                            <button class="btn-secondary" style="padding: 4px 12px; font-size: 12px; margin-top: 0;" @onclick="() => UnblockUser(blocked.Fingerprint)">
+                                @L("Unblock")
+                            </button>
+                        </div>
+                    }
+                }
+            </div>
+
+            <!-- Panic Button Section -->
+            <div class="settings-section">
+                <div class="settings-section-title" style="color: var(--danger);">@L("PanicButton")</div>
+                @if (!_showPanicConfirm)
+                {
+                    <button class="btn-panic" @onclick="() => _showPanicConfirm = true">
+                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                            <path d="M9 2L2 16h14L9 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                            <path d="M9 7v4M9 13v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                        @L("DeleteAllData")
+                    </button>
+                }
+                else
+                {
+                    <div style="padding: 16px; background: rgba(231, 76, 60, 0.1); border: 1px solid var(--danger); border-radius: var(--radius-md);">
+                        <p style="font-size: 14px; color: var(--danger); font-weight: 600; margin-bottom: 8px;">
+                            @L("CannotBeUndone")
+                        </p>
+                        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 16px;">
+                            All messages, rooms, keys, and profile data will be permanently destroyed.
+                        </p>
+                        <div class="panic-confirm-actions">
+                            <button class="btn-panic" @onclick="ExecutePanicWipe" disabled="@_panicLoading">
+                                @(_panicLoading ? "WIPING..." : "CONFIRM WIPE")
+                            </button>
+                            <button class="btn-secondary" @onclick="() => _showPanicConfirm = false">
+                                @L("Cancel")
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @if (!string.IsNullOrEmpty(_settingsError))
+            {
+                <div class="form-error">@_settingsError</div>
+            }
+            @if (!string.IsNullOrEmpty(_settingsSuccess))
+            {
+                <div style="font-size: 12px; color: var(--success); margin-top: 4px;">@_settingsSuccess</div>
+            }
+
+            <button class="btn-primary" @onclick="SaveSettings">@L("Save")</button>
+            <button class="btn-secondary" @onclick="CloseDialogs">@L("Close")</button>
+        </div>
+    </div>
+}
+
+<!-- Panic Wipe Full-Screen Overlay -->
+@if (_panicWiping)
+{
+    <div class="panic-confirm-overlay">
+        <div class="panic-confirm-dialog">
+            <h3>WIPING ALL DATA...</h3>
+            <p>Securely overwriting and deleting all files. Do not close the application.</p>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ChatRoom> _rooms = [];
+    private ChatRoom? _selectedRoom;
+    private string _selectedRoomId = string.Empty;
+    private string _selectedRoomPassword = string.Empty;
+
+    // Dialog state
+    private bool _showCreateRoom;
+    private bool _showJoinRoom;
+    private bool _showRoomPassword;
+    private bool _showDeleteConfirm;
+    private bool _showSettings;
+    private string _newRoomName = string.Empty;
+    private string _newRoomPassword = string.Empty;
+    private string _newRoomDescription = string.Empty;
+    private int _newRoomCapacity;
+    private string _joinRoomId = string.Empty;
+    private string _joinRoomName = string.Empty;
+    private string _joinRoomPassword = string.Empty;
+    private string _unlockPassword = string.Empty;
+    private ChatRoom? _unlockRoomTarget;
+    private ChatRoom? _deleteRoomTarget;
+    private string _dialogError = string.Empty;
+    private bool _dialogLoading;
+
+    // Settings
+    private string _settingsDisplayName = string.Empty;
+    private string _settingsLanguage = "en";
+    private int _settingsAutoLock;
+    private bool _settingsNotifSounds = true;
+    private bool _settingsScreenCapture;
+
+    // Security settings fields
+    private bool _secDoubleRatchet = true;
+    private bool _secPostQuantum;
+    private bool _secMultiLayer;
+    private bool _secDeniable;
+    private bool _secTrafficObf = true;
+    private bool _secTiming = true;
+    private bool _secDnsLeak = true;
+    private bool _secCertPinning;
+    private string? _secBridgeLine;
+    private string? _secTransport;
+    private string? _secGuardNodes;
+    private bool _secRamOnly;
+    private bool _secAutoMeta = true;
+    private bool _secDeadMan;
+    private int _secDeadManDays = 30;
+    private bool _secTamper = true;
+    private bool _secIntegrity = true;
+    private bool _secCanary = true;
+    private int _secMaxAttempts = 5;
+    private string _settingsError = string.Empty;
+    private string _settingsSuccess = string.Empty;
+
+    // Password change
+    private bool _showPasswordChange;
+    private string _pwdCurrent = string.Empty;
+    private string _pwdNew = string.Empty;
+    private string _pwdConfirm = string.Empty;
+    private string _pwdError = string.Empty;
+    private string _pwdSuccess = string.Empty;
+    private bool _pwdLoading;
+
+    // Blocked users
+    private List<BlockedUser> _blockedUsers = [];
+
+    // Panic
+    private bool _showPanicConfirm;
+    private bool _panicLoading;
+    private bool _panicWiping;
+
+    // Tor
+    private bool _torConnecting;
+    private string? _torError;
+
+    // Room passwords (in-memory only, never stored plaintext)
+    private readonly Dictionary<string, string> _roomPasswords = new();
+
+    // Localization helper
+    private static string L(string key) => LocalizationService.T(key);
+
+    private string GetTransportBtnClass(string transport) =>
+        $"transport-btn{(_secTransport == transport ? " active" : "")}";
+
+    private void ToggleTransport(string transport) =>
+        _secTransport = _secTransport == transport ? null : transport;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _rooms = await Chat.GetRoomsAsync();
+        LoadSettingsFromProfile();
+
+        // Set language
+        LocalizationService.CurrentLanguage = _settingsLanguage;
+
+        // Auto-connect to Tor in background
+        if (!Chat.IsTorConnected)
+        {
+            _ = AutoConnectTorAsync();
+        }
+    }
+
+    private async Task AutoConnectTorAsync()
+    {
+        _torConnecting = true;
+        _torError = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            await Chat.StartTorAsync();
+        }
+        catch (Exception ex)
+        {
+            _torError = ex.Message;
+            System.Diagnostics.Debug.WriteLine($"Auto Tor connection failed: {ex.Message}");
+        }
+        finally
+        {
+            _torConnecting = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // ──────── Room Selection ────────
+
+    private void SelectRoom(ChatRoom room)
+    {
+        Chat.ResetActivityTimer();
+
+        if (!_roomPasswords.TryGetValue(room.Id, out var password))
+        {
+            _unlockRoomTarget = room;
+            _unlockPassword = string.Empty;
+            _dialogError = string.Empty;
+            _showRoomPassword = true;
+            return;
+        }
+
+        ActivateRoom(room, password);
+    }
+
+    private void ActivateRoom(ChatRoom room, string password)
+    {
+        _selectedRoom = room;
+        _selectedRoomId = room.Id;
+        _selectedRoomPassword = password;
+        Chat.UnlockRoom(room.Id, password, room.RoomSalt);
+        StateHasChanged();
+    }
+
+    private async Task HandleUnlockKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await UnlockRoom();
+    }
+
+    private Task UnlockRoom()
+    {
+        _dialogError = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_unlockPassword))
+        {
+            _dialogError = "Password is required.";
+            return Task.CompletedTask;
+        }
+
+        if (_unlockRoomTarget is null) return Task.CompletedTask;
+
+        _roomPasswords[_unlockRoomTarget.Id] = _unlockPassword;
+        ActivateRoom(_unlockRoomTarget, _unlockPassword);
+        _showRoomPassword = false;
+        _unlockRoomTarget = null;
+        return Task.CompletedTask;
+    }
+
+    // ──────── Room Context Menu ────────
+
+    private void ShowRoomContextMenu(Microsoft.AspNetCore.Components.Web.MouseEventArgs e, ChatRoom room)
+    {
+        _deleteRoomTarget = room;
+        _showDeleteConfirm = true;
+    }
+
+    private async Task ConfirmDeleteRoom()
+    {
+        if (_deleteRoomTarget is null) return;
+
+        try
+        {
+            await Chat.DeleteRoomAsync(_deleteRoomTarget.Id);
+            _rooms.Remove(_deleteRoomTarget);
+            _roomPasswords.Remove(_deleteRoomTarget.Id);
+
+            if (_selectedRoomId == _deleteRoomTarget.Id)
+            {
+                _selectedRoom = null;
+                _selectedRoomId = string.Empty;
+            }
+        }
+        catch (Exception ex)
+        {
+            _dialogError = ex.Message;
+        }
+
+        _deleteRoomTarget = null;
+        _showDeleteConfirm = false;
+        StateHasChanged();
+    }
+
+    // ──────── Tor ────────
+
+    private async Task ConnectTor()
+    {
+        _torConnecting = true;
+        _torError = null;
+        StateHasChanged();
+
+        try
+        {
+            await Chat.StartTorAsync();
+        }
+        catch (Exception ex)
+        {
+            _torError = ex.Message;
+            System.Diagnostics.Debug.WriteLine($"Tor connection failed: {ex.Message}");
+        }
+        finally
+        {
+            _torConnecting = false;
+            StateHasChanged();
+        }
+    }
+
+    // ──────── Dialogs ────────
+
+    private void ShowCreateRoomDialog()
+    {
+        CloseDialogs();
+        _showCreateRoom = true;
+        _dialogError = string.Empty;
+        _newRoomName = string.Empty;
+        _newRoomPassword = string.Empty;
+        _newRoomDescription = string.Empty;
+        _newRoomCapacity = 0;
+    }
+
+    private void ShowJoinRoomDialog()
+    {
+        CloseDialogs();
+        _showJoinRoom = true;
+        _dialogError = string.Empty;
+        _joinRoomId = string.Empty;
+        _joinRoomName = string.Empty;
+        _joinRoomPassword = string.Empty;
+    }
+
+    private void CloseDialogs()
+    {
+        _showCreateRoom = false;
+        _showJoinRoom = false;
+        _showRoomPassword = false;
+        _showDeleteConfirm = false;
+        _showSettings = false;
+        _dialogError = string.Empty;
+        _settingsError = string.Empty;
+        _settingsSuccess = string.Empty;
+        _showPasswordChange = false;
+        _showPanicConfirm = false;
+        _pwdError = string.Empty;
+        _pwdSuccess = string.Empty;
+        _pwdCurrent = string.Empty;
+        _pwdNew = string.Empty;
+        _pwdConfirm = string.Empty;
+    }
+
+    // ──────── Create / Join ────────
+
+    private async Task CreateRoom()
+    {
+        _dialogError = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_newRoomName))
+        {
+            _dialogError = "Room name is required.";
+            return;
+        }
+
+        if (_newRoomPassword.Length < 6)
+        {
+            _dialogError = "Room password must be at least 6 characters.";
+            return;
+        }
+
+        _dialogLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var room = await Chat.CreateRoomAsync(
+                _newRoomName, _newRoomPassword,
+                string.IsNullOrWhiteSpace(_newRoomDescription) ? null : _newRoomDescription,
+                _newRoomCapacity);
+            _rooms.Insert(0, room);
+            _roomPasswords[room.Id] = _newRoomPassword;
+            ActivateRoom(room, _newRoomPassword);
+            _showCreateRoom = false;
+        }
+        catch (Exception ex)
+        {
+            _dialogError = $"Failed: {ex.Message}";
+        }
+        finally
+        {
+            _dialogLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task JoinRoom()
+    {
+        _dialogError = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_joinRoomId))
+        {
+            _dialogError = "Room ID is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_joinRoomPassword))
+        {
+            _dialogError = "Room password is required.";
+            return;
+        }
+
+        _dialogLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var saltInput = System.Text.Encoding.UTF8.GetBytes($"tordeX-room-salt-v1:{_joinRoomId}");
+            var roomSalt = System.Security.Cryptography.SHA256.HashData(saltInput);
+
+            var name = string.IsNullOrWhiteSpace(_joinRoomName) ? "Room " + _joinRoomId[..8] : _joinRoomName;
+            var room = await Chat.JoinRoomAsync(_joinRoomId, name, _joinRoomPassword, roomSalt);
+            _rooms.Insert(0, room);
+            _roomPasswords[room.Id] = _joinRoomPassword;
+            ActivateRoom(room, _joinRoomPassword);
+            _showJoinRoom = false;
+        }
+        catch (Exception ex)
+        {
+            _dialogError = $"Failed: {ex.Message}";
+        }
+        finally
+        {
+            _dialogLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    // ──────── Settings ────────
+
+    private async void OpenSettings()
+    {
+        CloseDialogs();
+        _showSettings = true;
+        LoadSettingsFromProfile();
+
+        try
+        {
+            _blockedUsers = await Chat.GetBlockedUsersAsync();
+        }
+        catch
+        {
+            _blockedUsers = [];
+        }
+
+        StateHasChanged();
+    }
+
+    private void OnLanguageChanged(ChangeEventArgs e)
+    {
+        _settingsLanguage = e.Value?.ToString() ?? "en";
+        LocalizationService.CurrentLanguage = _settingsLanguage;
+        StateHasChanged();
+    }
+
+    private async Task SaveSettings()
+    {
+        _settingsError = string.Empty;
+        _settingsSuccess = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_settingsDisplayName))
+        {
+            _settingsError = "Display name cannot be empty.";
+            return;
+        }
+
+        try
+        {
+            if (Chat.CurrentUser is not null)
+            {
+                Chat.CurrentUser.DisplayName = _settingsDisplayName.Trim();
+                Chat.CurrentUser.Language = _settingsLanguage;
+                Chat.CurrentUser.AutoLockMinutes = _settingsAutoLock;
+                Chat.CurrentUser.NotificationSounds = _settingsNotifSounds;
+                Chat.CurrentUser.ScreenCaptureProtection = _settingsScreenCapture;
+                Chat.CurrentUser.DoubleRatchetEnabled = _secDoubleRatchet;
+                Chat.CurrentUser.PostQuantumEnabled = _secPostQuantum;
+                Chat.CurrentUser.MultiLayerEncryption = _secMultiLayer;
+                Chat.CurrentUser.DeniableEncryption = _secDeniable;
+                Chat.CurrentUser.TrafficObfuscation = _secTrafficObf;
+                Chat.CurrentUser.TimingProtection = _secTiming;
+                Chat.CurrentUser.DnsLeakProtection = _secDnsLeak;
+                Chat.CurrentUser.RamOnlyMode = _secRamOnly;
+                Chat.CurrentUser.AutoMetadataStrip = _secAutoMeta;
+                Chat.CurrentUser.DeadManSwitch = _secDeadMan;
+                Chat.CurrentUser.DeadManSwitchDays = _secDeadManDays;
+                Chat.CurrentUser.TamperDetection = _secTamper;
+                Chat.CurrentUser.IntegrityMonitoring = _secIntegrity;
+                Chat.CurrentUser.CanaryTokens = _secCanary;
+                Chat.CurrentUser.MaxLoginAttempts = _secMaxAttempts;
+                Chat.CurrentUser.TorBridgeLine = _secBridgeLine;
+                Chat.CurrentUser.TorPluggableTransport = _secTransport;
+                Chat.CurrentUser.PinnedGuardNodes = _secGuardNodes;
+
+                await Chat.UpdateProfileAsync();
+            }
+
+            // Apply screen capture protection immediately
+            ApplyScreenCaptureProtection(_settingsScreenCapture);
+
+            LocalizationService.CurrentLanguage = _settingsLanguage;
+
+            _settingsSuccess = L("SettingsSaved");
+            StateHasChanged();
+            await Task.Delay(1500);
+            _showSettings = false;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            _settingsError = ex.Message;
+        }
+    }
+
+    private void LoadSettingsFromProfile()
+    {
+        _settingsDisplayName = Chat.CurrentUser?.DisplayName ?? string.Empty;
+        _settingsLanguage = Chat.CurrentUser?.Language ?? "en";
+        _settingsAutoLock = Chat.CurrentUser?.AutoLockMinutes ?? 0;
+        _settingsNotifSounds = Chat.CurrentUser?.NotificationSounds ?? true;
+        _settingsScreenCapture = Chat.CurrentUser?.ScreenCaptureProtection ?? false;
+        _secDoubleRatchet = Chat.CurrentUser?.DoubleRatchetEnabled ?? true;
+        _secPostQuantum = Chat.CurrentUser?.PostQuantumEnabled ?? false;
+        _secMultiLayer = Chat.CurrentUser?.MultiLayerEncryption ?? false;
+        _secDeniable = Chat.CurrentUser?.DeniableEncryption ?? false;
+        _secTrafficObf = Chat.CurrentUser?.TrafficObfuscation ?? true;
+        _secTiming = Chat.CurrentUser?.TimingProtection ?? true;
+        _secDnsLeak = Chat.CurrentUser?.DnsLeakProtection ?? true;
+        _secRamOnly = Chat.CurrentUser?.RamOnlyMode ?? false;
+        _secAutoMeta = Chat.CurrentUser?.AutoMetadataStrip ?? true;
+        _secDeadMan = Chat.CurrentUser?.DeadManSwitch ?? false;
+        _secDeadManDays = Chat.CurrentUser?.DeadManSwitchDays ?? 30;
+        _secTamper = Chat.CurrentUser?.TamperDetection ?? true;
+        _secIntegrity = Chat.CurrentUser?.IntegrityMonitoring ?? true;
+        _secCanary = Chat.CurrentUser?.CanaryTokens ?? true;
+        _secMaxAttempts = Chat.CurrentUser?.MaxLoginAttempts ?? 5;
+        _secBridgeLine = Chat.CurrentUser?.TorBridgeLine;
+        _secTransport = Chat.CurrentUser?.TorPluggableTransport;
+        _secGuardNodes = Chat.CurrentUser?.PinnedGuardNodes;
+    }
+
+    private void ApplyScreenCaptureProtection(bool enabled)
+    {
+        // Access the WPF MainWindow to set display affinity
+        if (System.Windows.Application.Current?.MainWindow is MainWindow mainWindow)
+        {
+            mainWindow.SetScreenCaptureProtection(enabled);
+        }
+    }
+
+    // ──────── Password Change ────────
+
+    private async Task ChangePassword()
+    {
+        _pwdError = string.Empty;
+        _pwdSuccess = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_pwdCurrent))
+        {
+            _pwdError = "Current password is required.";
+            return;
+        }
+        if (_pwdNew.Length < 8)
+        {
+            _pwdError = L("PasswordMinLength");
+            return;
+        }
+        if (_pwdNew != _pwdConfirm)
+        {
+            _pwdError = L("PasswordsDoNotMatch");
+            return;
+        }
+
+        _pwdLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var ok = await Chat.ChangePasswordAsync(_pwdCurrent, _pwdNew);
+            if (!ok)
+            {
+                _pwdError = L("InvalidPassword");
+            }
+            else
+            {
+                _pwdSuccess = L("PasswordChanged");
+                _pwdCurrent = string.Empty;
+                _pwdNew = string.Empty;
+                _pwdConfirm = string.Empty;
+                _showPasswordChange = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _pwdError = ex.Message;
+        }
+        finally
+        {
+            _pwdLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private static int GetPasswordStrength(string password)
+    {
+        if (string.IsNullOrEmpty(password)) return 0;
+        int score = 0;
+        if (password.Length >= 8) score++;
+        if (password.Length >= 12) score++;
+        if (password.Any(char.IsUpper) && password.Any(char.IsLower)) score++;
+        if (password.Any(c => !char.IsLetterOrDigit(c))) score++;
+        return score;
+    }
+
+    private static string GetStrengthClass(int strength) => strength switch
+    {
+        <= 1 => "weak",
+        2 => "medium",
+        3 => "medium",
+        _ => "strong"
+    };
+
+    // ──────── Blocked Users ────────
+
+    private async Task UnblockUser(string fingerprint)
+    {
+        try
+        {
+            await Chat.UnblockUserAsync(fingerprint);
+            _blockedUsers.RemoveAll(b => b.Fingerprint == fingerprint);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            _settingsError = ex.Message;
+        }
+    }
+
+    // ──────── Lock ────────
+
+    private void LockApp()
+    {
+        Chat.LockApp();
+    }
+
+    // ──────── Panic Wipe ────────
+
+    private async Task ExecutePanicWipe()
+    {
+        _panicLoading = true;
+        _panicWiping = true;
+        StateHasChanged();
+
+        try
+        {
+            await Chat.PanicWipeAsync();
+
+            // Force application exit after wipe
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                System.Windows.Application.Current.Shutdown();
+            });
+        }
+        catch (Exception ex)
+        {
+            _panicLoading = false;
+            _panicWiping = false;
+            _settingsError = $"Wipe failed: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+}

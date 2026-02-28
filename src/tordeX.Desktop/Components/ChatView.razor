@@ -1,0 +1,1069 @@
+@using System.IO
+@using TordeX.Core.Models
+@using TordeX.Core.Services
+@using Microsoft.JSInterop
+@inject ChatService Chat
+@inject IJSRuntime JS
+
+<!-- Pinned Messages Bar -->
+@if (_pinnedMessages.Count > 0)
+{
+    <div class="pinned-bar" @onclick="() => _showPinnedList = !_showPinnedList">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M6 1v4M4 5h4l1 3H3l1-3zM6 8v3" stroke="var(--accent)" stroke-width="1" stroke-linecap="round"/>
+        </svg>
+        <span>@_pinnedMessages.Count pinned message(s)</span>
+    </div>
+}
+
+<!-- Search Bar -->
+@if (_showSearch)
+{
+    <div class="search-bar">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M10 10l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <input type="text" class="search-input" placeholder="Search messages..."
+               @bind="_searchQuery" @bind:event="oninput" @onkeydown="HandleSearchKeyDown" />
+        <span style="font-size: 11px; color: var(--text-muted);">@_searchResults.Count results</span>
+        <button class="btn-icon" style="width: 24px; height: 24px;" @onclick="CloseSearch">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+        </button>
+    </div>
+}
+
+<div class="chat-header">
+    <div>
+        <span class="chat-header-title">@Room.Name</span>
+        @if (!string.IsNullOrEmpty(Room.Description))
+        {
+            <span style="font-size: 11px; color: var(--text-muted); margin-left: 8px;">@Room.Description</span>
+        }
+        <span class="encryption-badge" style="margin-left: 8px;">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <rect x="1" y="4.5" width="8" height="5" rx="1" stroke="currentColor" stroke-width="1"/>
+                <path d="M3 4.5V3a2 2 0 014 0v1.5" stroke="currentColor" stroke-width="1"/>
+            </svg>
+            E2E
+        </span>
+    </div>
+    <div style="display: flex; gap: 4px; align-items: center;">
+        <button class="btn-icon" title="@L("Bookmarks")" @onclick="() => _showBookmarks = !_showBookmarks">
+            🔖
+        </button>
+        <button class="btn-icon" title="@L("SearchMessages")" @onclick="() => _showSearch = !_showSearch">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+        </button>
+        <button class="btn-icon" title="@L("RoomInformation")" @onclick="ToggleRoomInfo">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M9 8v5M9 6V5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+        </button>
+    </div>
+</div>
+
+<div class="chat-messages" @ref="_messagesContainer" id="chat-messages"
+     @ondragenter="HandleDragEnter" @ondragleave="HandleDragLeave" @ondragover:preventDefault
+     @ondrop="HandleDrop" @ondrop:preventDefault>
+    @if (_displayMessages.Count == 0)
+    {
+        <div class="empty-state">
+            <svg viewBox="0 0 64 64" fill="none" width="48" height="48">
+                <rect x="1" y="20" width="36" height="28" rx="4" stroke="currentColor" stroke-width="2"/>
+                <path d="M3 28h36" stroke="currentColor" stroke-width="2"/>
+                <circle cx="21" cy="38" r="4" stroke="currentColor" stroke-width="2"/>
+            </svg>
+            <h3>Start Chatting</h3>
+            <p>Messages are end-to-end encrypted with AES-256-GCM.</p>
+        </div>
+    }
+    else
+    {
+        @foreach (var msg in _displayMessages)
+        {
+            @if (msg.Type == MessageType.System)
+            {
+                <div style="text-align: center; font-size: 12px; color: var(--text-muted); padding: 8px 0;">
+                    @msg.Content
+                </div>
+            }
+            else if (msg.IsDeleted)
+            {
+                <div class="message-group @(msg.IsOwn ? "own" : "other")">
+                    <div class="message-bubble deleted-message">
+                        <em>This message was deleted</em>
+                    </div>
+                    <div class="message-time">@msg.Timestamp.ToLocalTime().ToString("HH:mm")</div>
+                </div>
+            }
+            else
+            {
+                <div class="message-group @(msg.IsOwn ? "own" : "other")"
+                     @oncontextmenu="(e) => ShowContextMenu(e, msg)" @oncontextmenu:preventDefault="true">
+
+                    @if (!msg.IsOwn)
+                    {
+                        <div class="message-sender">
+                            <span class="msg-avatar">@msg.SenderDisplayName[0..1].ToUpper()</span>
+                            @msg.SenderDisplayName
+                            @if (Chat.IsUserBlocked(msg.SenderFingerprint))
+                            {
+                                <span style="color: var(--danger); font-size: 10px; margin-left: 4px;">[blocked]</span>
+                            }
+                        </div>
+                    }
+
+                    @if (msg.ReplyToContent is not null)
+                    {
+                        <div class="reply-preview">
+                            <div class="reply-preview-sender">@(msg.ReplyToSenderName ?? "Unknown")</div>
+                            <div class="reply-preview-text">@TruncateText(msg.ReplyToContent, 80)</div>
+                        </div>
+                    }
+
+                    @if (msg.IsPinned)
+                    {
+                        <div class="pin-badge">
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                                <path d="M5 1v3M3.5 4h3l.5 2H3l.5-2zM5 6v3" stroke="var(--accent)" stroke-width="0.8" stroke-linecap="round"/>
+                            </svg>
+                            Pinned
+                        </div>
+                    }
+
+                    @if (msg.Type == MessageType.Text)
+                    {
+                        <div class="message-bubble">
+                            <div class="msg-markdown">@((MarkupString)MarkdownService.Render(msg.Content))</div>
+                            @if (msg.EditedAt.HasValue)
+                            {
+                                <span class="edited-badge">(@L("Edited"))</span>
+                            }
+                        </div>
+                        @if (GetFirstUrl(msg.Content) is string firstUrl)
+                        {
+                            <div class="link-preview" @onclick="() => OpenUrl(firstUrl)">
+                                <div class="link-preview-info">
+                                    <div class="link-preview-title">@L("LinkPreview")</div>
+                                    <div class="link-preview-url">@firstUrl</div>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else if (msg.Type == MessageType.Image)
+                    {
+                        <div class="message-bubble">
+                            @if (msg.IsViewOnce)
+                            {
+                                <div class="view-once-badge">👁 @L("ViewOnce")</div>
+                            }
+                            @if (msg.IsViewOnce && msg.ViewedAt.HasValue && !msg.IsOwn)
+                            {
+                                <div class="view-once-overlay">
+                                    <span>👁 @L("ViewOnceOpened")</span>
+                                </div>
+                            }
+                            else if (msg.IsViewOnce && !msg.ViewedAt.HasValue && !msg.IsOwn)
+                            {
+                                <div class="view-once-blur" @onclick="() => OpenViewOnce(msg)">
+                                    <div class="view-once-overlay">
+                                        <span>👁 @L("ViewOnce")</span>
+                                    </div>
+                                </div>
+                            }
+                            else if (_imageCache.TryGetValue(msg.Content, out var imgSrc))
+                            {
+                                <img src="@imgSrc" class="inline-image" alt="@(msg.FileName ?? "Image")"
+                                     @onclick="() => ShowImageFullscreen(imgSrc)" />
+                            }
+                            else
+                            {
+                                <div class="file-attachment" @onclick="() => LoadImagePreview(msg)">
+                                    <div class="file-icon">📷</div>
+                                    <div>
+                                        <div class="file-name">@(msg.FileName ?? "Image")</div>
+                                        <div class="file-size">@FormatFileSize(msg.FileSize ?? 0) - Click to load</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else if (msg.Type == MessageType.Video)
+                    {
+                        <div class="message-bubble">
+                            <div class="file-attachment">
+                                <div class="file-icon">🎬</div>
+                                <div>
+                                    <div class="file-name">@(msg.FileName ?? "Video")</div>
+                                    <div class="file-size">@FormatFileSize(msg.FileSize ?? 0) - Encrypted</div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else if (msg.Type == MessageType.Voice)
+                    {
+                        <div class="message-bubble">
+                            <div class="voice-message">
+                                <button class="voice-play-btn" @onclick="() => PlayVoice(msg)">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                        <path d="M4 3l9 5-9 5V3z" fill="currentColor"/>
+                                    </svg>
+                                </button>
+                                <div class="voice-waveform">
+                                    @for (int i = 0; i < 20; i++)
+                                    {
+                                        <div class="voice-bar" style="height: @(8 + Random.Shared.Next(16))px;"></div>
+                                    }
+                                </div>
+                                <span class="voice-duration">@FormatDuration(msg.VoiceDuration ?? 0)</span>
+                            </div>
+                        </div>
+                    }
+                    else if (msg.Type == MessageType.File)
+                    {
+                        <div class="message-bubble">
+                            <div class="file-attachment">
+                                <div class="file-icon">📄</div>
+                                <div>
+                                    <div class="file-name">@(msg.FileName ?? "File")</div>
+                                    <div class="file-size">@FormatFileSize(msg.FileSize ?? 0) - Encrypted</div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    @* ── Reactions Bar ── *@
+                    @if (msg.Reactions is not null && msg.Reactions.Count > 0)
+                    {
+                        <div class="reaction-bar">
+                            @foreach (var reaction in msg.Reactions)
+                            {
+                                var isOwn = reaction.Value.Contains(Chat.CurrentUser?.Id ?? "");
+                                <button class="reaction-pill @(isOwn ? "own" : "")"
+                                        @onclick="() => ToggleReaction(msg, reaction.Key)">
+                                    <span>@reaction.Key</span>
+                                    <span class="reaction-count">@reaction.Value.Count</span>
+                                </button>
+                            }
+                            <button class="reaction-add-btn" @onclick="() => ShowReactionPicker(msg)">+</button>
+                        </div>
+                    }
+
+                    <div class="message-meta @(Chat.CurrentUser?.ShowTimestamps == false ? "timestamp-hidden" : "")">
+                        <span class="message-time">@msg.Timestamp.ToLocalTime().ToString("HH:mm")</span>
+                        @if (msg.IsOwn)
+                        {
+                            <span class="read-receipt @(msg.IsRead ? "read" : msg.IsDelivered ? "delivered" : "")">
+                                @if (msg.IsRead)
+                                { <text>✓✓</text> }
+                                else if (msg.IsDelivered)
+                                { <text>✓</text> }
+                            </span>
+                        }
+                        @if (msg.SelfDestructAt.HasValue)
+                        {
+                            <span class="self-destruct-badge" title="Self-destructs">⏱️</span>
+                        }
+                    </div>
+
+                    <!-- Hover actions -->
+                    <div class="message-actions">
+                        <button class="msg-action-btn" title="@L("AddReaction")" @onclick="() => ShowReactionPicker(msg)">😊</button>
+                        <button class="msg-action-btn" title="@L("Reply")" @onclick="() => StartReply(msg)">↩</button>
+                        <button class="msg-action-btn bookmark-icon @(msg.IsBookmarked ? "active" : "")"
+                                title="@L("Bookmark")" @onclick="() => ToggleBookmark(msg)">🔖</button>
+                        @if (msg.IsOwn)
+                        {
+                            <button class="msg-action-btn" title="@L("Edit")" @onclick="() => StartEdit(msg)">✏</button>
+                            <button class="msg-action-btn" title="@L("Delete")" @onclick="() => DeleteMessage(msg)">🗑</button>
+                        }
+                        <button class="msg-action-btn" title="@L("Forward")" @onclick="() => StartForward(msg)">↗</button>
+                        <button class="msg-action-btn" title="@(msg.IsPinned ? L("Unpin") : L("Pin"))" @onclick="() => TogglePin(msg)">📌</button>
+                        @if (!msg.IsOwn)
+                        {
+                            <button class="msg-action-btn" title="@L("BlockUser")" @onclick="() => BlockSender(msg)">🚫</button>
+                        }
+                    </div>
+
+                    @* ── Reaction Quick Picker ── *@
+                    @if (_reactionPickerTarget?.Id == msg.Id)
+                    {
+                        <div class="reaction-picker-mini">
+                            @foreach (var emoji in _quickReactions)
+                            {
+                                <button @onclick="() => AddReaction(msg, emoji)">@emoji</button>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+    }
+</div>
+
+<!-- Context Menu -->
+@if (_showContextMenu)
+{
+    <div class="context-menu-backdrop" @onclick="CloseContextMenu">
+        <div class="context-menu" style="top: @(_contextMenuY)px; left: @(_contextMenuX)px;" @onclick:stopPropagation="true">
+            <button class="context-menu-item" @onclick="() => { StartReply(_contextMessage!); CloseContextMenu(); }">↩ Reply</button>
+            @if (_contextMessage?.IsOwn == true)
+            {
+                <button class="context-menu-item" @onclick="() => { StartEdit(_contextMessage!); CloseContextMenu(); }">✏ Edit</button>
+                <button class="context-menu-item danger" @onclick="async () => { await DeleteMessage(_contextMessage!); CloseContextMenu(); }">🗑 Delete</button>
+            }
+            <button class="context-menu-item" @onclick="() => { StartForward(_contextMessage!); CloseContextMenu(); }">↗ Forward</button>
+            <button class="context-menu-item" @onclick="async () => { await TogglePin(_contextMessage!); CloseContextMenu(); }">📌 @(_contextMessage?.IsPinned == true ? "Unpin" : "Pin")</button>
+            <button class="context-menu-item" @onclick="async () => { await CopyMessage(_contextMessage!); CloseContextMenu(); }">📋 @L("Copy")</button>
+            <button class="context-menu-item" @onclick="async () => { await ToggleBookmark(_contextMessage!); CloseContextMenu(); }">
+                🔖 @(_contextMessage?.IsBookmarked == true ? L("RemoveBookmark") : L("Bookmark"))
+            </button>
+            <button class="context-menu-item" @onclick="() => { ShowReactionPicker(_contextMessage!); CloseContextMenu(); }">😊 @L("AddReaction")</button>
+            @if (_contextMessage?.IsOwn == false)
+            {
+                <hr class="context-menu-divider" />
+                <button class="context-menu-item danger" @onclick="async () => { await BlockSender(_contextMessage!); CloseContextMenu(); }">🚫 @L("BlockUser")</button>
+            }
+        </div>
+    </div>
+}
+
+<!-- Drag & Drop Overlay -->
+@if (_isDragOver)
+{
+    <div class="drag-overlay">
+        <div class="drag-content">
+            <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                <rect x="8" y="8" width="32" height="32" rx="4" stroke="var(--accent)" stroke-width="2" stroke-dasharray="4 4"/>
+                <path d="M24 18v12M18 24h12" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <p>Drop file here to send encrypted</p>
+        </div>
+    </div>
+}
+
+<!-- Fullscreen Image -->
+@if (_fullscreenImage is not null)
+{
+    <div class="image-fullscreen" @onclick="() => _fullscreenImage = null">
+        <img src="@_fullscreenImage" alt="Full size" />
+    </div>
+}
+
+<!-- Forward Dialog -->
+@if (_showForwardDialog)
+{
+    <div class="modal-backdrop" @onclick="() => _showForwardDialog = false">
+        <div class="modal" @onclick:stopPropagation="true">
+            <div class="modal-title">Forward Message</div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Select a room to forward to:</p>
+            @foreach (var room in _allRooms.Where(r => r.Id != Room.Id))
+            {
+                <button class="forward-room-item" @onclick="() => ForwardToRoom(room)">
+                    <span class="room-icon">@room.Name[0..1].ToUpper()</span>
+                    @room.Name
+                </button>
+            }
+            <button class="btn-secondary" style="margin-top: 12px;" @onclick="() => _showForwardDialog = false">Cancel</button>
+        </div>
+    </div>
+}
+
+<!-- Input Area -->
+<div class="chat-input-area">
+    @if (_replyingTo is not null)
+    {
+        <div class="reply-bar">
+            <div style="flex: 1; min-width: 0;">
+                <div class="reply-bar-sender">Replying to @_replyingTo.SenderDisplayName</div>
+                <div class="reply-bar-text">@TruncateText(_replyingTo.Content, 60)</div>
+            </div>
+            <button class="btn-icon" style="width: 24px; height: 24px;" @onclick="CancelReply">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+    }
+
+    @if (_editingMessage is not null)
+    {
+        <div class="reply-bar" style="border-left-color: var(--warning);">
+            <div style="flex: 1;">
+                <div class="reply-bar-sender" style="color: var(--warning);">Editing message</div>
+            </div>
+            <button class="btn-icon" style="width: 24px; height: 24px;" @onclick="CancelEdit">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+    }
+
+    @if (_selectedFileName is not null)
+    {
+        <div style="padding: 4px 0 8px 0; display: flex; align-items: center; gap: 8px;">
+            <div class="file-attachment" style="flex: 1; margin: 0;">
+                <div class="file-icon">📎</div>
+                <div style="flex: 1; min-width: 0;">
+                    <div class="file-name">@_selectedFileName</div>
+                    <div class="file-size">@FormatFileSize(_selectedFileSize)</div>
+                </div>
+                <button class="btn-icon" style="width: 24px; height: 24px;" @onclick="CancelFileUpload">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    }
+
+    @if (_showEmojiPicker)
+    {
+        <EmojiPicker OnEmojiSelected="InsertEmoji" OnClose="() => _showEmojiPicker = false" />
+    }
+
+    <!-- Self-destruct toggle -->
+    @if (_selfDestructEnabled)
+    {
+        <div style="padding: 4px 8px; font-size: 11px; color: var(--warning); display: flex; align-items: center; gap: 6px;">
+            <span>⏱️ Self-destruct: @_selfDestructSeconds s</span>
+            <input type="range" min="5" max="300" step="5" @bind="_selfDestructSeconds" style="flex:1; max-width: 120px;" />
+            <button class="btn-icon" style="width: 20px; height: 20px; font-size: 10px;" @onclick="() => _selfDestructEnabled = false">✕</button>
+        </div>
+    }
+
+    <div class="chat-input-container">
+        <button class="btn-icon" title="Emoji" @onclick="() => _showEmojiPicker = !_showEmojiPicker">
+            😊
+        </button>
+
+        <label class="btn-icon" title="Attach file" style="cursor: pointer;">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M15 9.5l-6.4 6.4a3.5 3.5 0 01-5-5L10 4.5a2.33 2.33 0 013.3 3.3L7 14.2a1.17 1.17 0 01-1.7-1.7l5.7-5.7"
+                      stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <InputFile OnChange="HandleFileSelected" style="display: none;" accept="*/*" />
+        </label>
+
+        <button class="btn-icon" title="Self-destruct timer" @onclick="() => _selfDestructEnabled = !_selfDestructEnabled">
+            ⏱️
+        </button>
+
+        <textarea class="chat-input" rows="1" placeholder="Type a message..."
+                  @bind="_messageText" @bind:event="oninput"
+                  @onkeydown="HandleKeyDown"
+                  @onpaste="HandlePaste"></textarea>
+
+        <button class="btn-icon btn-send" @onclick="SendMessage"
+                disabled="@(string.IsNullOrWhiteSpace(_messageText) && _selectedFileData is null)"
+                title="Send (Enter)">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M16 2L7 11M16 2l-5 14-2-5-5-2 12-7z"
+                      stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+    </div>
+</div>
+
+@* ── Bookmarks Panel ── *@
+@if (_showBookmarks)
+{
+    <div class="bookmarks-panel">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <span style="font-weight: 600; font-size: 14px;">🔖 @L("Bookmarks")</span>
+            <button class="btn-icon" style="width: 24px; height: 24px;" @onclick="() => _showBookmarks = false">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+        @if (_bookmarks.Count == 0)
+        {
+            <div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 24px 0;">
+                @L("NoBookmarks")
+            </div>
+        }
+        else
+        {
+            @foreach (var bm in _bookmarks)
+            {
+                <div class="bookmark-item">
+                    <div class="bookmark-item-content">@TruncateText(bm.ContentPreview, 100)</div>
+                    <div class="bookmark-item-meta">
+                        <span class="bookmark-author">@bm.SenderName</span>
+                        <span>@bm.CreatedAt.ToLocalTime().ToString("dd/MM HH:mm")</span>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+}
+
+@if (_showRoomInfo)
+{
+    <div class="modal-backdrop" @onclick="() => _showRoomInfo = false">
+        <div class="modal" @onclick:stopPropagation="true">
+            <div class="modal-title">Room Information</div>
+
+            <div class="form-group">
+                <label class="form-label">Room ID</label>
+                <input type="text" class="form-input" value="@Room.Id" readonly
+                       style="font-family: var(--font-mono); font-size: 12px; user-select: text;" />
+            </div>
+
+            @if (!string.IsNullOrEmpty(Room.Description))
+            {
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <div style="font-size: 13px; color: var(--text-secondary); padding: 8px; background: var(--bg-tertiary); border-radius: var(--radius-md);">
+                        @Room.Description
+                    </div>
+                </div>
+            }
+
+            @if (Room.MaxCapacity > 0)
+            {
+                <div class="form-group">
+                    <label class="form-label">Max Capacity</label>
+                    <input type="text" class="form-input" value="@Room.MaxCapacity members" readonly />
+                </div>
+            }
+
+            @if (Room.InviteToken is not null)
+            {
+                <div class="form-group">
+                    <label class="form-label">Invite Link</label>
+                    <div style="display: flex; gap: 6px;">
+                        <input type="text" class="form-input" value="@Chat.GenerateInviteLink(Room)" readonly
+                               style="font-family: var(--font-mono); font-size: 11px; flex: 1;" />
+                        <button class="btn-secondary" style="width: auto; padding: 8px 12px; font-size: 11px;"
+                                @onclick="CopyInviteLink">@(_inviteCopied ? "Copied!" : "Copy")</button>
+                    </div>
+                </div>
+            }
+
+            <div class="form-group">
+                <label class="form-label">Encryption</label>
+                <div class="encryption-badge" style="margin-top: 4px;">
+                    AES-256-GCM + PBKDF2-SHA512 (600K iterations)
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Messages</label>
+                <input type="text" class="form-input" value="@_messages.Count messages" readonly />
+            </div>
+
+            <button class="btn-secondary" @onclick="() => _showRoomInfo = false">Close</button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public ChatRoom Room { get; set; } = null!;
+    [Parameter, EditorRequired] public string RoomPassword { get; set; } = string.Empty;
+
+    private List<ChatMessage> _messages = [];
+    private List<ChatMessage> _displayMessages = [];
+    private List<ChatMessage> _pinnedMessages = [];
+    private List<ChatMessage> _searchResults = [];
+    private List<ChatRoom> _allRooms = [];
+    private string _messageText = string.Empty;
+    private bool _showRoomInfo;
+    private bool _isDragOver;
+    private bool _showEmojiPicker;
+    private bool _showSearch;
+    private bool _showForwardDialog;
+    private bool _showContextMenu;
+    private bool _showPinnedList;
+    private bool _showBookmarks;
+    private List<TordeX.Core.Models.Bookmark> _bookmarks = [];
+    private bool _selfDestructEnabled;
+    private int _selfDestructSeconds = 30;
+    private string _searchQuery = string.Empty;
+    private string? _fullscreenImage;
+    private bool _inviteCopied;
+    private double _contextMenuX, _contextMenuY;
+    private ChatMessage? _contextMessage;
+    private ElementReference _messagesContainer;
+
+    // Reply/Edit state
+    private ChatMessage? _replyingTo;
+    private ChatMessage? _editingMessage;
+    private ChatMessage? _forwardMessage;
+
+    // File upload state
+    private string? _selectedFileName;
+    private long _selectedFileSize;
+    private byte[]? _selectedFileData;
+    private string? _selectedFileMimeType;
+
+    // Image cache (fileId -> data:uri)
+    private readonly Dictionary<string, string> _imageCache = new();
+
+    // Reactions
+    private ChatMessage? _reactionPickerTarget;
+    private static readonly string[] _quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🔥", "👎", "🎉"];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadMessages();
+        _allRooms = await Chat.GetRoomsAsync();
+        _bookmarks = await Chat.GetBookmarksAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval",
+                "document.getElementById('chat-messages')?.scrollTo(0, document.getElementById('chat-messages')?.scrollHeight ?? 0)");
+        }
+        catch { }
+    }
+
+    private async Task LoadMessages()
+    {
+        try
+        {
+            _messages = await Chat.GetMessagesAsync(Room.Id);
+            _pinnedMessages = _messages.Where(m => m.IsPinned && !m.IsDeleted).ToList();
+            _displayMessages = _messages;
+        }
+        catch
+        {
+            _messages = [];
+            _displayMessages = [];
+        }
+    }
+
+    // ──── Sending ────
+
+    private async Task HandleKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessage();
+        }
+        else if (e.Key == "Escape")
+        {
+            CancelReply();
+            CancelEdit();
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        Chat.ResetActivityTimer();
+
+        if (_selectedFileData is not null && _selectedFileName is not null)
+        {
+            try
+            {
+                var message = await Chat.SendFileMessageAsync(
+                    Room.Id, _selectedFileName, _selectedFileData,
+                    _selectedFileMimeType ?? "application/octet-stream");
+                _messages.Add(message);
+            }
+            catch (Exception ex) { AddSystemMessage($"Failed to send file: {ex.Message}"); }
+            CancelFileUpload();
+        }
+
+        if (!string.IsNullOrWhiteSpace(_messageText))
+        {
+            var text = _messageText.Trim();
+            _messageText = string.Empty;
+
+            if (_editingMessage is not null)
+            {
+                try
+                {
+                    await Chat.EditMessageAsync(Room.Id, _editingMessage.Id, text);
+                    _editingMessage.Content = text;
+                    _editingMessage.EditedAt = DateTimeOffset.UtcNow;
+                }
+                catch (Exception ex) { AddSystemMessage($"Edit failed: {ex.Message}"); }
+                CancelEdit();
+            }
+            else
+            {
+                try
+                {
+                    var message = await Chat.SendTextMessageAsync(
+                        Room.Id, text,
+                        replyToId: _replyingTo?.Id,
+                        replyToContent: _replyingTo is not null ? TruncateText(_replyingTo.Content, 100) : null,
+                        replyToSenderName: _replyingTo?.SenderDisplayName,
+                        selfDestructSeconds: _selfDestructEnabled ? _selfDestructSeconds : null);
+                    _messages.Add(message);
+                }
+                catch (Exception ex) { AddSystemMessage($"Failed to send: {ex.Message}"); }
+                CancelReply();
+            }
+        }
+
+        _displayMessages = _messages;
+        StateHasChanged();
+    }
+
+    // ──── Reply/Edit/Delete/Forward/Pin ────
+
+    private void StartReply(ChatMessage msg)
+    {
+        _replyingTo = msg;
+        _editingMessage = null;
+        StateHasChanged();
+    }
+
+    private void CancelReply() { _replyingTo = null; StateHasChanged(); }
+
+    private void StartEdit(ChatMessage msg)
+    {
+        _editingMessage = msg;
+        _messageText = msg.Content;
+        _replyingTo = null;
+        StateHasChanged();
+    }
+
+    private void CancelEdit() { _editingMessage = null; StateHasChanged(); }
+
+    private async Task DeleteMessage(ChatMessage msg)
+    {
+        try
+        {
+            await Chat.DeleteMessageAsync(msg.Id);
+            msg.IsDeleted = true;
+            StateHasChanged();
+        }
+        catch (Exception ex) { AddSystemMessage($"Delete failed: {ex.Message}"); }
+    }
+
+    private void StartForward(ChatMessage msg)
+    {
+        _forwardMessage = msg;
+        _showForwardDialog = true;
+        StateHasChanged();
+    }
+
+    private async Task ForwardToRoom(ChatRoom targetRoom)
+    {
+        if (_forwardMessage is null) return;
+        try
+        {
+            await Chat.ForwardMessageAsync(targetRoom.Id, _forwardMessage);
+            AddSystemMessage($"Message forwarded to {targetRoom.Name}");
+        }
+        catch (Exception ex) { AddSystemMessage($"Forward failed: {ex.Message}"); }
+        _showForwardDialog = false;
+        _forwardMessage = null;
+        StateHasChanged();
+    }
+
+    private async Task TogglePin(ChatMessage msg)
+    {
+        try
+        {
+            if (msg.IsPinned)
+            {
+                await Chat.UnpinMessageAsync(msg.Id);
+                msg.IsPinned = false;
+                _pinnedMessages.Remove(msg);
+            }
+            else
+            {
+                await Chat.PinMessageAsync(msg.Id, Room.Id);
+                msg.IsPinned = true;
+                _pinnedMessages.Add(msg);
+            }
+            StateHasChanged();
+        }
+        catch (Exception ex) { AddSystemMessage($"Pin failed: {ex.Message}"); }
+    }
+
+    private async Task BlockSender(ChatMessage msg)
+    {
+        try
+        {
+            await Chat.BlockUserAsync(msg.SenderFingerprint, msg.SenderDisplayName);
+            AddSystemMessage($"User {msg.SenderDisplayName} blocked.");
+            StateHasChanged();
+        }
+        catch (Exception ex) { AddSystemMessage($"Block failed: {ex.Message}"); }
+    }
+
+    private async Task CopyMessage(ChatMessage msg)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", msg.Content);
+        }
+        catch { }
+    }
+
+    // ──── Context Menu ────
+
+    private void ShowContextMenu(Microsoft.AspNetCore.Components.Web.MouseEventArgs e, ChatMessage msg)
+    {
+        _contextMessage = msg;
+        _contextMenuX = e.ClientX;
+        _contextMenuY = e.ClientY;
+        _showContextMenu = true;
+        StateHasChanged();
+    }
+
+    private void CloseContextMenu() { _showContextMenu = false; StateHasChanged(); }
+
+    // ──── Search ────
+
+    private async Task HandleSearchKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            _searchResults = await Chat.SearchMessagesAsync(Room.Id, _searchQuery);
+            _displayMessages = _searchResults.Count > 0 ? _searchResults : _messages;
+            StateHasChanged();
+        }
+        else if (e.Key == "Escape") CloseSearch();
+    }
+
+    private void CloseSearch()
+    {
+        _showSearch = false;
+        _searchQuery = string.Empty;
+        _searchResults = [];
+        _displayMessages = _messages;
+        StateHasChanged();
+    }
+
+    // ──── Emoji ────
+
+    private void InsertEmoji(string emoji)
+    {
+        _messageText += emoji;
+        StateHasChanged();
+    }
+
+    // ──── File Upload ────
+
+    private async Task HandleFileSelected(Microsoft.AspNetCore.Components.Forms.InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        const long maxSize = 50 * 1024 * 1024;
+        if (file.Size > maxSize) { AddSystemMessage("File too large. Maximum 50 MB."); return; }
+
+        _selectedFileName = file.Name;
+        _selectedFileSize = file.Size;
+        _selectedFileMimeType = file.ContentType;
+
+        using var stream = file.OpenReadStream(maxSize);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        _selectedFileData = ms.ToArray();
+        StateHasChanged();
+    }
+
+    private void CancelFileUpload()
+    {
+        _selectedFileName = null;
+        _selectedFileSize = 0;
+        _selectedFileData = null;
+        _selectedFileMimeType = null;
+        StateHasChanged();
+    }
+
+    // ──── Drag & Drop ────
+
+    private void HandleDragEnter() => _isDragOver = true;
+    private void HandleDragLeave() => _isDragOver = false;
+    private void HandleDrop() => _isDragOver = false;
+
+    // ──── Clipboard Paste ────
+
+    private Task HandlePaste(Microsoft.AspNetCore.Components.Web.ClipboardEventArgs e)
+    {
+        // Clipboard image paste is handled via JS interop
+        // Basic text paste is handled natively by the textarea
+        return Task.CompletedTask;
+    }
+
+    // ──── Image Preview ────
+
+    private async Task LoadImagePreview(ChatMessage msg)
+    {
+        try
+        {
+            var data = await Chat.GetFileAsync(msg.Content, Room.Id, msg.FileName);
+            if (data is not null)
+            {
+                var mime = msg.MimeType ?? "image/png";
+                var base64 = Convert.ToBase64String(data);
+                _imageCache[msg.Content] = $"data:{mime};base64,{base64}";
+                StateHasChanged();
+            }
+        }
+        catch { }
+    }
+
+    private void ShowImageFullscreen(string src) => _fullscreenImage = src;
+
+    private Task PlayVoice(ChatMessage msg)
+    {
+        // Voice playback would require JS interop with Web Audio API
+        return Task.CompletedTask;
+    }
+
+    // ──── Room Info ────
+
+    private void ToggleRoomInfo() => _showRoomInfo = !_showRoomInfo;
+
+    private async Task CopyInviteLink()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", Chat.GenerateInviteLink(Room));
+            _inviteCopied = true;
+            StateHasChanged();
+            await Task.Delay(2000);
+            _inviteCopied = false;
+            StateHasChanged();
+        }
+        catch { }
+    }
+
+    // ──── Reactions ────
+
+    private void ShowReactionPicker(ChatMessage msg)
+    {
+        _reactionPickerTarget = _reactionPickerTarget?.Id == msg.Id ? null : msg;
+        StateHasChanged();
+    }
+
+    private async Task AddReaction(ChatMessage msg, string emoji)
+    {
+        try
+        {
+            await Chat.AddReactionAsync(msg.Id, Room.Id, emoji);
+            var fp = Chat.CurrentUser?.Id ?? "";
+            msg.Reactions ??= new Dictionary<string, List<string>>();
+            if (!msg.Reactions.ContainsKey(emoji))
+                msg.Reactions[emoji] = [];
+            if (!msg.Reactions[emoji].Contains(fp))
+                msg.Reactions[emoji].Add(fp);
+        }
+        catch (Exception ex) { AddSystemMessage($"Reaction failed: {ex.Message}"); }
+        _reactionPickerTarget = null;
+        StateHasChanged();
+    }
+
+    private async Task ToggleReaction(ChatMessage msg, string emoji)
+    {
+        var fp = Chat.CurrentUser?.Id ?? "";
+        if (msg.Reactions?.ContainsKey(emoji) == true && msg.Reactions[emoji].Contains(fp))
+        {
+            try
+            {
+                await Chat.RemoveReactionAsync(msg.Id, Room.Id, emoji);
+                msg.Reactions[emoji].Remove(fp);
+                if (msg.Reactions[emoji].Count == 0)
+                    msg.Reactions.Remove(emoji);
+            }
+            catch (Exception ex) { AddSystemMessage($"Remove reaction failed: {ex.Message}"); }
+        }
+        else
+        {
+            await AddReaction(msg, emoji);
+            return;
+        }
+        StateHasChanged();
+    }
+
+    // ──── Bookmarks ────
+
+    private async Task ToggleBookmark(ChatMessage msg)
+    {
+        try
+        {
+            await Chat.ToggleBookmarkAsync(msg, Room.Name);
+            msg.IsBookmarked = !msg.IsBookmarked;
+            StateHasChanged();
+        }
+        catch (Exception ex) { AddSystemMessage($"Bookmark failed: {ex.Message}"); }
+    }
+
+    // ──── View Once ────
+
+    private async Task OpenViewOnce(ChatMessage msg)
+    {
+        try
+        {
+            await Chat.MarkViewOnceOpenedAsync(msg.Id);
+            msg.ViewedAt = DateTimeOffset.UtcNow;
+            await LoadImagePreview(msg);
+            StateHasChanged();
+        }
+        catch (Exception ex) { AddSystemMessage($"View once failed: {ex.Message}"); }
+    }
+
+    // ──── URL / Link ────
+
+    private async Task OpenUrl(string url)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("open", url, "_blank");
+        }
+        catch { }
+    }
+
+    // ──── Localization helper ────
+
+    private static string L(string key) => LocalizationService.T(key);
+
+    // ──── Helpers ────
+
+    private void AddSystemMessage(string content)
+    {
+        _messages.Add(new ChatMessage
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            RoomId = Room.Id,
+            SenderFingerprint = "system",
+            SenderDisplayName = "System",
+            Type = MessageType.System,
+            Content = content,
+            Timestamp = DateTimeOffset.UtcNow
+        });
+        _displayMessages = _messages;
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1048576) return $"{bytes / 1024.0:F1} KB";
+        if (bytes < 1073741824) return $"{bytes / 1048576.0:F1} MB";
+        return $"{bytes / 1073741824.0:F1} GB";
+    }
+
+    private static string FormatDuration(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.TotalMinutes >= 1 ? $"{(int)ts.TotalMinutes}:{ts.Seconds:D2}" : $"0:{ts.Seconds:D2}";
+    }
+
+    private static string TruncateText(string text, int maxLen)
+        => text.Length <= maxLen ? text : text[..maxLen] + "...";
+
+    private static string? GetFirstUrl(string text)
+    {
+        var urls = MarkdownService.ExtractUrls(text);
+        return urls.Count > 0 ? urls[0] : null;
+    }
+}

@@ -1,0 +1,186 @@
+@using System.IO
+@using TordeX.Core.Services
+@inject ChatService Chat
+
+<div class="login-container">
+    <div class="login-card">
+        <div class="login-logo">
+            <img src="img/logo.png" alt="tordeX" />
+            <h1>tordeX</h1>
+            <p>Encrypted. Decentralized. Private.</p>
+        </div>
+
+        @if (_isNewUser)
+        {
+            <!-- Registration Form -->
+            <div class="form-group">
+                <label class="form-label">Display Name</label>
+                <input type="text" class="form-input" placeholder="Choose a display name"
+                       @bind="_displayName" @bind:event="oninput" maxlength="32" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="password" class="form-input" placeholder="Min. 8 characters"
+                       @bind="_password" @bind:event="oninput" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Confirm Password</label>
+                <input type="password" class="form-input" placeholder="Repeat password"
+                       @bind="_confirmPassword" @bind:event="oninput"
+                       @onkeydown="HandleKeyDown" />
+            </div>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="form-error">@_error</div>
+            }
+
+            <button class="btn-primary" @onclick="CreateProfile" disabled="@_isLoading">
+                @if (_isLoading)
+                {
+                    <span>Creating Profile...</span>
+                }
+                else
+                {
+                    <span>Create Secure Profile</span>
+                }
+            </button>
+        }
+        else
+        {
+            <!-- Login Form -->
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="password" class="form-input" placeholder="Enter your password"
+                       @bind="_password" @bind:event="oninput"
+                       @onkeydown="HandleKeyDown" />
+            </div>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="form-error">@_error</div>
+            }
+
+            <button class="btn-primary" @onclick="Login" disabled="@_isLoading">
+                @if (_isLoading)
+                {
+                    <span>Unlocking...</span>
+                }
+                else
+                {
+                    <span>Unlock</span>
+                }
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnLoggedIn { get; set; }
+
+    private string _displayName = string.Empty;
+    private string _password = string.Empty;
+    private string _confirmPassword = string.Empty;
+    private string _error = string.Empty;
+    private bool _isLoading;
+    private bool _isNewUser;
+
+    protected override void OnInitialized()
+    {
+        _isNewUser = !Chat.HasUserProfile();
+    }
+
+    private async Task HandleKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (_isNewUser)
+                await CreateProfile();
+            else
+                await Login();
+        }
+    }
+
+    private async Task CreateProfile()
+    {
+        _error = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_displayName))
+        {
+            _error = "Display name is required.";
+            return;
+        }
+
+        if (_password.Length < 8)
+        {
+            _error = "Password must be at least 8 characters.";
+            return;
+        }
+
+        if (_password != _confirmPassword)
+        {
+            _error = "Passwords do not match.";
+            return;
+        }
+
+        _isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            await Chat.CreateProfileAsync(_displayName, _password);
+            await OnLoggedIn.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to create profile: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Login()
+    {
+        _error = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_password))
+        {
+            _error = "Password is required.";
+            return;
+        }
+
+        _isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var success = await Chat.LoginAsync(_password);
+            if (success)
+            {
+                await OnLoggedIn.InvokeAsync();
+            }
+            else
+            {
+                _error = "Invalid password. Please try again.";
+            }
+        }
+        catch (FileNotFoundException)
+        {
+            _error = "Profile data is corrupted. Please delete %APPDATA%/tordeX and create a new profile.";
+        }
+        catch (Exception ex)
+        {
+            _error = $"Login failed: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+}

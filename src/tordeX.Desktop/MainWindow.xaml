@@ -1,0 +1,17 @@
+<Window x:Class="TordeX.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:blazor="clr-namespace:Microsoft.AspNetCore.Components.WebView.Wpf;assembly=Microsoft.AspNetCore.Components.WebView.Wpf"
+        Title="tordeX"
+        Height="700" Width="1100"
+        MinHeight="500" MinWidth="800"
+        Background="#0d0d0f"
+        WindowStartupLocation="CenterScreen"
+        Closing="Window_Closing"
+        StateChanged="Window_StateChanged">
+
+    <Grid>
+        <blazor:BlazorWebView x:Name="BlazorWebView"
+                               HostPage="wwwroot/index.html" />
+    </Grid>
+</Window>

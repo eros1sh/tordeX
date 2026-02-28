@@ -1,0 +1,51 @@
+@code {
+    [Parameter] public EventCallback<string> OnEmojiSelected { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string _searchQuery = string.Empty;
+    private int _selectedCategory;
+
+    private static readonly (string Name, string[] Emojis)[] Categories =
+    [
+        ("Smileys", ["😀","😂","😊","😍","🥰","😘","😎","🤔","😏","😢","😭","😡","🥺","😱","🤣","😴","🤗","🤮","🥳","😈","👻","💀","🤡","😇","🙄","😬","🫠","🫣","😮‍💨","🫡"]),
+        ("Gestures", ["👍","👎","👋","🤝","✌️","🤞","🫶","👊","✊","🤙","👏","🙏","💪","🫰","🤌","👌","🤟","🖖","👆","👇","👈","👉","🖕","✋","🤚","🫳","🫴","👐"]),
+        ("Hearts", ["❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔","❤️‍🔥","❤️‍🩹","💕","💞","💓","💗","💖","💝","💘","💟","♥️","🫀"]),
+        ("Objects", ["🔒","🔓","🔑","🗝️","💻","📱","🖥️","📸","🎮","🎧","🎵","📧","✉️","📎","📌","🔍","💡","🕐","⏰","📅","🗓️","📝","✏️","📂","🗑️","🧲","🔗","🔔"]),
+        ("Symbols", ["⚡","🔥","💥","✨","🌟","⭐","💫","🎯","✅","❌","⚠️","🚫","♻️","🔄","🏳️","🏴","🚀","💎","🎉","🎊","🎈","🎁","🏆","🥇","🎪","🎭","🎬","🎤"]),
+        ("Flags", ["🇹🇷","🇺🇸","🇬🇧","🇩🇪","🇫🇷","🇪🇸","🇮🇹","🇯🇵","🇰🇷","🇨🇳","🇷🇺","🇧🇷","🇮🇳","🇦🇺","🇨🇦","🇳🇱","🇸🇪","🇳🇴","🇵🇱","🇺🇦","🏴‍☠️"]),
+    ];
+
+    private IEnumerable<string> FilteredEmojis
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_searchQuery))
+                return Categories[_selectedCategory].Emojis;
+            return Categories.SelectMany(c => c.Emojis).Distinct();
+        }
+    }
+}
+
+<div class="emoji-picker">
+    <div class="emoji-categories">
+        @for (int i = 0; i < Categories.Length; i++)
+        {
+            var idx = i;
+            <button class="emoji-category-btn @(_selectedCategory == idx ? "active" : "")"
+                    @onclick="() => _selectedCategory = idx" title="@Categories[idx].Name">
+                @Categories[idx].Emojis[0]
+            </button>
+        }
+        <button class="emoji-category-btn" style="margin-left: auto;" @onclick="OnClose" title="Close">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+        </button>
+    </div>
+    <div class="emoji-grid">
+        @foreach (var emoji in FilteredEmojis)
+        {
+            <button class="emoji-btn" @onclick="() => OnEmojiSelected.InvokeAsync(emoji)">@emoji</button>
+        }
+    </div>
+</div>
