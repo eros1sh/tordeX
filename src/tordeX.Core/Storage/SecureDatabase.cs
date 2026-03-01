@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
 using TordeX.Core.Cryptography;
 using TordeX.Core.Services;
@@ -35,6 +38,8 @@ public sealed class SecureDatabase : IAsyncDisposable
 
     public async Task InitializeAsync(byte[] masterKey, CancellationToken ct = default)
     {
+        // Convert masterKey to hex passphrase for SQLCipher.
+        // Safe from injection: Convert.ToHexString only produces [0-9A-F] characters.
         var passphrase = Convert.ToHexString(masterKey);
 
         var connectionString = new SqliteConnectionStringBuilder
@@ -167,7 +172,8 @@ public sealed class SecureDatabase : IAsyncDisposable
                 room_name TEXT NOT NULL,
                 sender_name TEXT NOT NULL,
                 content_preview TEXT NOT NULL,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS key_rotations (
@@ -197,93 +203,171 @@ public sealed class SecureDatabase : IAsyncDisposable
         await ExecuteNonQueryAsync(schema, ct);
     }
 
+    // Current schema version — bump when adding new migration groups
+    private const int CurrentSchemaVersion = 5;
+
+    private async Task<int> GetSchemaVersionAsync(CancellationToken ct)
+    {
+        var val = await GetSettingAsync("schema_version", ct);
+        return val is not null && int.TryParse(val, out var v) ? v : 0;
+    }
+
+    private async Task SetSchemaVersionAsync(int version, CancellationToken ct)
+    {
+        await SetSettingAsync("schema_version", version.ToString(), ct);
+    }
+
     /// <summary>
-    /// Add columns that may not exist in older DBs (forward-compatible migration).
+    /// Version-gated schema migration. Reads current version, skips already-applied groups.
+    /// Groups are applied in order; each group has try/catch as safety net for first run.
     /// </summary>
     private async Task MigrateSchemaAsync(CancellationToken ct)
     {
-        var migrations = new[]
-        {
-            "ALTER TABLE messages ADD COLUMN reply_to_id TEXT",
-            "ALTER TABLE messages ADD COLUMN reply_to_content TEXT",
-            "ALTER TABLE messages ADD COLUMN reply_to_sender TEXT",
-            "ALTER TABLE messages ADD COLUMN edited_at TEXT",
-            "ALTER TABLE messages ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0",
-            "ALTER TABLE messages ADD COLUMN self_destruct_seconds INTEGER",
-            "ALTER TABLE messages ADD COLUMN self_destruct_at TEXT",
-            "ALTER TABLE messages ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0",
-            "ALTER TABLE messages ADD COLUMN is_delivered INTEGER NOT NULL DEFAULT 0",
-            "ALTER TABLE messages ADD COLUMN is_read INTEGER NOT NULL DEFAULT 0",
-            "ALTER TABLE messages ADD COLUMN voice_duration REAL",
-            "ALTER TABLE rooms ADD COLUMN description TEXT",
-            "ALTER TABLE rooms ADD COLUMN max_capacity INTEGER NOT NULL DEFAULT 0",
-            "ALTER TABLE rooms ADD COLUMN invite_token TEXT",
-            "ALTER TABLE rooms ADD COLUMN onion_address TEXT",
-            "ALTER TABLE user_profile ADD COLUMN avatar_data BLOB",
-            "ALTER TABLE user_profile ADD COLUMN language TEXT DEFAULT 'en'",
-            "ALTER TABLE user_profile ADD COLUMN auto_lock_minutes INTEGER DEFAULT 0",
-            "ALTER TABLE user_profile ADD COLUMN notification_sounds INTEGER DEFAULT 1",
-            "ALTER TABLE user_profile ADD COLUMN screen_capture_protection INTEGER DEFAULT 0",
-            "ALTER TABLE user_profile ADD COLUMN show_timestamps INTEGER DEFAULT 1",
-            "ALTER TABLE messages ADD COLUMN is_view_once INTEGER NOT NULL DEFAULT 0",
-            "ALTER TABLE messages ADD COLUMN viewed_at TEXT",
-            // Security & Privacy settings migrations
-            "ALTER TABLE user_profile ADD COLUMN double_ratchet INTEGER DEFAULT 1",
-            "ALTER TABLE user_profile ADD COLUMN post_quantum INTEGER DEFAULT 0",
-            "ALTER TABLE user_profile ADD COLUMN multi_layer_enc INTEGER DEFAULT 0",
-            "ALTER TABLE user_profile ADD COLUMN deniable_enc INTEGER DEFAULT 0",
-            "ALTER TABLE user_profile ADD COLUMN traffic_obfuscation INTEGER DEFAULT 1",
-            "ALTER TABLE user_profile ADD COLUMN timing_protection INTEGER DEFAULT 1",
-            "ALTER TABLE user_profile ADD COLUMN ram_only_mode INTEGER DEFAULT 0",
-            "ALTER TABLE user_profile ADD COLUMN dns_leak_protection INTEGER DEFAULT 1",
-            "ALTER TABLE user_profile ADD COLUMN dead_man_switch INTEGER DEFAULT 0",
-            "ALTER TABLE user_profile ADD COLUMN dead_man_switch_days INTEGER DEFAULT 30",
-            "ALTER TABLE user_profile ADD COLUMN tamper_detection INTEGER DEFAULT 1",
-            "ALTER TABLE user_profile ADD COLUMN integrity_monitoring INTEGER DEFAULT 1",
-            "ALTER TABLE user_profile ADD COLUMN canary_tokens INTEGER DEFAULT 1",
-            "ALTER TABLE user_profile ADD COLUMN auto_metadata_strip INTEGER DEFAULT 1",
-            "ALTER TABLE user_profile ADD COLUMN tor_bridge_line TEXT",
-            "ALTER TABLE user_profile ADD COLUMN tor_pluggable_transport TEXT",
-            "ALTER TABLE user_profile ADD COLUMN pinned_guard_nodes TEXT",
-            "ALTER TABLE user_profile ADD COLUMN max_login_attempts INTEGER DEFAULT 5",
-            "ALTER TABLE user_profile ADD COLUMN lockout_minutes INTEGER DEFAULT 15",
-            // Canary tokens table
-            @"CREATE TABLE IF NOT EXISTS canary_tokens (
-                id TEXT PRIMARY KEY,
-                token_hash TEXT NOT NULL,
-                location TEXT NOT NULL,
-                placed_at TEXT NOT NULL,
-                last_verified TEXT
-            )",
-            // Security audit log table
-            @"CREATE TABLE IF NOT EXISTS security_audit_log (
-                id TEXT PRIMARY KEY,
-                event_type TEXT NOT NULL,
-                description TEXT NOT NULL,
-                severity TEXT NOT NULL,
-                timestamp TEXT NOT NULL,
-                details TEXT
-            )",
-            // Integrity manifest table
-            @"CREATE TABLE IF NOT EXISTS integrity_manifest (
-                file_path TEXT PRIMARY KEY,
-                sha256_hash TEXT NOT NULL,
-                file_size INTEGER NOT NULL,
-                last_modified TEXT NOT NULL,
-                verified_at TEXT NOT NULL
-            )",
-        };
+        var currentVersion = await GetSchemaVersionAsync(ct);
 
-        foreach (var migration in migrations)
+        // V1: message reply/edit/delete columns + room description/capacity
+        if (currentVersion < 1)
         {
-            try
+            var v1 = new[]
             {
-                await ExecuteNonQueryAsync(migration, ct);
-            }
-            catch (SqliteException)
+                "ALTER TABLE messages ADD COLUMN reply_to_id TEXT",
+                "ALTER TABLE messages ADD COLUMN reply_to_content TEXT",
+                "ALTER TABLE messages ADD COLUMN reply_to_sender TEXT",
+                "ALTER TABLE messages ADD COLUMN edited_at TEXT",
+                "ALTER TABLE messages ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE messages ADD COLUMN self_destruct_seconds INTEGER",
+                "ALTER TABLE messages ADD COLUMN self_destruct_at TEXT",
+                "ALTER TABLE messages ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE messages ADD COLUMN is_delivered INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE messages ADD COLUMN is_read INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE messages ADD COLUMN voice_duration REAL",
+                "ALTER TABLE rooms ADD COLUMN description TEXT",
+                "ALTER TABLE rooms ADD COLUMN max_capacity INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE rooms ADD COLUMN invite_token TEXT",
+                "ALTER TABLE rooms ADD COLUMN onion_address TEXT",
+                "ALTER TABLE user_profile ADD COLUMN avatar_data BLOB",
+                "ALTER TABLE user_profile ADD COLUMN language TEXT DEFAULT 'en'",
+                "ALTER TABLE user_profile ADD COLUMN auto_lock_minutes INTEGER DEFAULT 0",
+                "ALTER TABLE user_profile ADD COLUMN notification_sounds INTEGER DEFAULT 1",
+                "ALTER TABLE user_profile ADD COLUMN screen_capture_protection INTEGER DEFAULT 0",
+                "ALTER TABLE user_profile ADD COLUMN show_timestamps INTEGER DEFAULT 1",
+                "ALTER TABLE messages ADD COLUMN is_view_once INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE messages ADD COLUMN viewed_at TEXT",
+            };
+            foreach (var sql in v1)
             {
-                // Column already exists — skip
+                try { await ExecuteNonQueryAsync(sql, ct); }
+                catch (SqliteException) { /* column already exists */ }
             }
+        }
+
+        // V2: security & privacy settings columns
+        if (currentVersion < 2)
+        {
+            var v2 = new[]
+            {
+                "ALTER TABLE user_profile ADD COLUMN double_ratchet INTEGER DEFAULT 1",
+                "ALTER TABLE user_profile ADD COLUMN post_quantum INTEGER DEFAULT 0",
+                "ALTER TABLE user_profile ADD COLUMN multi_layer_enc INTEGER DEFAULT 0",
+                "ALTER TABLE user_profile ADD COLUMN deniable_enc INTEGER DEFAULT 0",
+                "ALTER TABLE user_profile ADD COLUMN traffic_obfuscation INTEGER DEFAULT 1",
+                "ALTER TABLE user_profile ADD COLUMN timing_protection INTEGER DEFAULT 1",
+                "ALTER TABLE user_profile ADD COLUMN ram_only_mode INTEGER DEFAULT 0",
+                "ALTER TABLE user_profile ADD COLUMN dns_leak_protection INTEGER DEFAULT 1",
+                "ALTER TABLE user_profile ADD COLUMN dead_man_switch INTEGER DEFAULT 0",
+                "ALTER TABLE user_profile ADD COLUMN dead_man_switch_days INTEGER DEFAULT 30",
+                "ALTER TABLE user_profile ADD COLUMN tamper_detection INTEGER DEFAULT 1",
+                "ALTER TABLE user_profile ADD COLUMN integrity_monitoring INTEGER DEFAULT 1",
+                "ALTER TABLE user_profile ADD COLUMN canary_tokens INTEGER DEFAULT 1",
+                "ALTER TABLE user_profile ADD COLUMN auto_metadata_strip INTEGER DEFAULT 1",
+                "ALTER TABLE user_profile ADD COLUMN tor_bridge_line TEXT",
+                "ALTER TABLE user_profile ADD COLUMN tor_pluggable_transport TEXT",
+                "ALTER TABLE user_profile ADD COLUMN pinned_guard_nodes TEXT",
+                "ALTER TABLE user_profile ADD COLUMN max_login_attempts INTEGER DEFAULT 5",
+                "ALTER TABLE user_profile ADD COLUMN lockout_minutes INTEGER DEFAULT 15",
+            };
+            foreach (var sql in v2)
+            {
+                try { await ExecuteNonQueryAsync(sql, ct); }
+                catch (SqliteException) { /* column already exists */ }
+            }
+        }
+
+        // V3: audit tables (canary tokens, security log, integrity manifest)
+        if (currentVersion < 3)
+        {
+            var v3 = new[]
+            {
+                @"CREATE TABLE IF NOT EXISTS canary_tokens (
+                    id TEXT PRIMARY KEY,
+                    token_hash TEXT NOT NULL,
+                    location TEXT NOT NULL,
+                    placed_at TEXT NOT NULL,
+                    last_verified TEXT
+                )",
+                @"CREATE TABLE IF NOT EXISTS security_audit_log (
+                    id TEXT PRIMARY KEY,
+                    event_type TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    severity TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    details TEXT
+                )",
+                @"CREATE TABLE IF NOT EXISTS integrity_manifest (
+                    file_path TEXT PRIMARY KEY,
+                    sha256_hash TEXT NOT NULL,
+                    file_size INTEGER NOT NULL,
+                    last_modified TEXT NOT NULL,
+                    verified_at TEXT NOT NULL
+                )",
+            };
+            foreach (var sql in v3)
+            {
+                try { await ExecuteNonQueryAsync(sql, ct); }
+                catch (SqliteException) { /* table already exists */ }
+            }
+        }
+
+        // V4: key rotation hash columns + encrypted search index
+        if (currentVersion < 4)
+        {
+            var v4 = new[]
+            {
+                "ALTER TABLE key_rotations ADD COLUMN old_key_hash BLOB",
+                "ALTER TABLE key_rotations ADD COLUMN new_key_hash BLOB",
+                @"CREATE TABLE IF NOT EXISTS message_search_tokens (
+                    room_id TEXT NOT NULL,
+                    message_id TEXT NOT NULL,
+                    token_hash BLOB NOT NULL
+                )",
+                "CREATE INDEX IF NOT EXISTS idx_search_tokens ON message_search_tokens(room_id, token_hash)",
+            };
+            foreach (var sql in v4)
+            {
+                try { await ExecuteNonQueryAsync(sql, ct); }
+                catch (SqliteException) { /* already applied */ }
+            }
+        }
+
+        // V5: Direct Message support columns
+        if (currentVersion < 5)
+        {
+            var v5 = new[]
+            {
+                "ALTER TABLE rooms ADD COLUMN is_dm INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE rooms ADD COLUMN peer_fingerprint TEXT",
+            };
+            foreach (var sql in v5)
+            {
+                try { await ExecuteNonQueryAsync(sql, ct); }
+                catch (SqliteException) { /* column already exists */ }
+            }
+        }
+
+        // Persist current version so future startups skip all groups
+        if (currentVersion < CurrentSchemaVersion)
+        {
+            await SetSchemaVersionAsync(CurrentSchemaVersion, ct);
         }
     }
 
@@ -420,10 +504,12 @@ public sealed class SecureDatabase : IAsyncDisposable
         const string sql = """
             INSERT OR REPLACE INTO rooms
                 (id, name, room_salt, created_at, last_activity_at, unread_count,
-                 description, max_capacity, invite_token, onion_address)
+                 description, max_capacity, invite_token, onion_address,
+                 is_dm, peer_fingerprint)
             VALUES
                 (@id, @name, @salt, @created, @activity, @unread,
-                 @desc, @maxCap, @invite, @onion)
+                 @desc, @maxCap, @invite, @onion,
+                 @isDm, @peerFp)
             """;
 
         await using var cmd = _connection!.CreateCommand();
@@ -438,6 +524,8 @@ public sealed class SecureDatabase : IAsyncDisposable
         cmd.Parameters.AddWithValue("@maxCap", room.MaxCapacity);
         cmd.Parameters.AddWithValue("@invite", (object?)room.InviteToken ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@onion", (object?)room.OnionAddress ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@isDm", room.IsDm ? 1 : 0);
+        cmd.Parameters.AddWithValue("@peerFp", (object?)room.PeerFingerprint ?? DBNull.Value);
         try
         {
             await cmd.ExecuteNonQueryAsync(ct);
@@ -454,7 +542,8 @@ public sealed class SecureDatabase : IAsyncDisposable
         EnsureOpen();
         const string sql = """
             SELECT id, name, room_salt, created_at, last_activity_at, unread_count,
-                   description, max_capacity, invite_token, onion_address
+                   description, max_capacity, invite_token, onion_address,
+                   is_dm, peer_fingerprint
             FROM rooms ORDER BY last_activity_at DESC
             """;
 
@@ -477,10 +566,21 @@ public sealed class SecureDatabase : IAsyncDisposable
                 MaxCapacity = reader.IsDBNull(7) ? 0 : reader.GetInt32(7),
                 InviteToken = reader.IsDBNull(8) ? null : reader.GetString(8),
                 OnionAddress = reader.IsDBNull(9) ? null : reader.GetString(9),
+                IsDm = !reader.IsDBNull(10) && reader.GetInt32(10) == 1,
+                PeerFingerprint = reader.IsDBNull(11) ? null : reader.GetString(11),
             });
         }
 
         return rooms;
+    }
+
+    public async Task ClearRoomOnionAddressAsync(string onionAddress, CancellationToken ct = default)
+    {
+        EnsureOpen();
+        await using var cmd = _connection!.CreateCommand();
+        cmd.CommandText = "UPDATE rooms SET onion_address = NULL WHERE onion_address = @onion";
+        cmd.Parameters.AddWithValue("@onion", onionAddress);
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 
     public async Task DeleteRoomAsync(string roomId, CancellationToken ct = default)
@@ -552,6 +652,9 @@ public sealed class SecureDatabase : IAsyncDisposable
             throw;
         }
 
+        // Index search tokens for encrypted search
+        await SaveSearchTokensAsync(roomId, message.Id, roomKey, message.Content, ct);
+
         // Update room activity
         await using var updateCmd = _connection!.CreateCommand();
         updateCmd.CommandText = "UPDATE rooms SET last_activity_at = @time WHERE id = @room";
@@ -577,10 +680,12 @@ public sealed class SecureDatabase : IAsyncDisposable
                    reply_to_id, reply_to_content, reply_to_sender, edited_at,
                    is_deleted, self_destruct_seconds, self_destruct_at, is_pinned,
                    is_delivered, is_read, voice_duration, is_view_once, viewed_at
-            FROM messages
-            WHERE room_id = @room
-            ORDER BY timestamp DESC
-            LIMIT @limit OFFSET @offset
+            FROM (
+                SELECT * FROM messages
+                WHERE room_id = @room
+                ORDER BY timestamp DESC
+                LIMIT @limit OFFSET @offset
+            ) ORDER BY timestamp ASC
             """;
 
         var messages = new List<Models.ChatMessage>();
@@ -600,8 +705,10 @@ public sealed class SecureDatabase : IAsyncDisposable
                 content = System.Text.Encoding.UTF8.GetString(
                     MessageEncryption.Decrypt(encryptedContent, roomKey));
             }
-            catch (System.Security.Cryptography.CryptographicException)
+            catch (System.Security.Cryptography.CryptographicException ex)
             {
+                var msgId = reader.GetString(0);
+                _logger?.Warn($"Message decryption failed: id={msgId}, encrypted_len={encryptedContent.Length}, error={ex.Message}");
                 content = "[Decryption failed]";
             }
 
@@ -633,7 +740,6 @@ public sealed class SecureDatabase : IAsyncDisposable
             });
         }
 
-        messages.Reverse();
         return messages;
     }
 
@@ -698,11 +804,109 @@ public sealed class SecureDatabase : IAsyncDisposable
     public async Task<List<Models.ChatMessage>> SearchMessagesAsync(
         string roomId, byte[] roomKey, string query, CancellationToken ct = default)
     {
-        // Decrypt-then-search: we must load all messages and filter in memory
-        // because the content is encrypted in the DB.
-        var all = await GetMessagesAsync(roomId, roomKey, limit: 500, offset: 0, ct: ct);
-        return all.Where(m => !m.IsDeleted &&
-            m.Content.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+        EnsureOpen();
+
+        // Tokenize query the same way as indexing
+        var queryTokens = TokenizeForSearch(query);
+        if (queryTokens.Count == 0)
+            return new List<Models.ChatMessage>();
+
+        // Compute HMAC hashes for each query token
+        var tokenHashes = new List<byte[]>();
+        foreach (var token in queryTokens)
+            tokenHashes.Add(ComputeSearchTokenHash(roomKey, token));
+
+        // Query search index for matching message IDs
+        await using var cmd = _connection!.CreateCommand();
+        var paramNames = new List<string>();
+        for (int i = 0; i < tokenHashes.Count; i++)
+        {
+            var paramName = $"@t{i}";
+            paramNames.Add(paramName);
+            cmd.Parameters.AddWithValue(paramName, tokenHashes[i]);
+        }
+        cmd.CommandText = $"SELECT DISTINCT message_id FROM message_search_tokens WHERE room_id = @room AND token_hash IN ({string.Join(", ", paramNames)})";
+        cmd.Parameters.AddWithValue("@room", roomId);
+
+        var matchingIds = new HashSet<string>();
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+                matchingIds.Add(reader.GetString(0));
+        }
+
+        if (matchingIds.Count == 0)
+        {
+            // Fallback: if no index entries exist (pre-index messages), use legacy search
+            var all = await GetMessagesAsync(roomId, roomKey, limit: 500, offset: 0, ct: ct);
+            return all.Where(m => !m.IsDeleted &&
+                m.Content.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        // Load and decrypt only matching messages
+        var messages = await GetMessagesAsync(roomId, roomKey, limit: 500, offset: 0, ct: ct);
+        return messages.Where(m => !m.IsDeleted && matchingIds.Contains(m.Id)).ToList();
+    }
+
+    /// <summary>
+    /// Save HMAC-based search tokens for a message. Called after encrypting content.
+    /// Enables O(1) encrypted search without decrypting all messages.
+    /// </summary>
+    public async Task SaveSearchTokensAsync(string roomId, string messageId, byte[] roomKey, string plaintext, CancellationToken ct = default)
+    {
+        EnsureOpen();
+        var tokens = TokenizeForSearch(plaintext);
+        if (tokens.Count == 0) return;
+
+        // Batch insert tokens
+        await using var cmd = _connection!.CreateCommand();
+        var sb = new StringBuilder("INSERT OR IGNORE INTO message_search_tokens (room_id, message_id, token_hash) VALUES ");
+        var paramIdx = 0;
+        cmd.Parameters.AddWithValue("@room", roomId);
+        cmd.Parameters.AddWithValue("@msgId", messageId);
+        var values = new List<string>();
+
+        foreach (var token in tokens)
+        {
+            var hash = ComputeSearchTokenHash(roomKey, token);
+            var paramName = $"@h{paramIdx++}";
+            cmd.Parameters.AddWithValue(paramName, hash);
+            values.Add($"(@room, @msgId, {paramName})");
+        }
+
+        sb.Append(string.Join(", ", values));
+        cmd.CommandText = sb.ToString();
+        try
+        {
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (SqliteException ex)
+        {
+            _logger?.DbError("SaveSearchTokens", ex, $"room_id={roomId}, message_id={messageId}");
+        }
+    }
+
+    /// <summary>
+    /// Tokenize text for search indexing: lowercase, split on non-alphanumeric, filter length >= 3.
+    /// </summary>
+    private static HashSet<string> TokenizeForSearch(string text)
+    {
+        var tokens = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var word in Regex.Split(text.ToLowerInvariant(), @"[\s\p{P}\p{S}]+", RegexOptions.NonBacktracking))
+        {
+            if (word.Length >= 3)
+                tokens.Add(word);
+        }
+        return tokens;
+    }
+
+    /// <summary>
+    /// Compute HMAC-SHA256 of a search token using room key, truncated to 16 bytes.
+    /// </summary>
+    private static byte[] ComputeSearchTokenHash(byte[] roomKey, string token)
+    {
+        var hash = HMACSHA256.HashData(roomKey, Encoding.UTF8.GetBytes(token));
+        return hash[..16]; // Truncate to 16 bytes for storage efficiency
     }
 
     public async Task DeleteSelfDestructedMessagesAsync(CancellationToken ct = default)
@@ -794,6 +998,47 @@ public sealed class SecureDatabase : IAsyncDisposable
         cmd.Parameters.AddWithValue("@key", key);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result as string;
+    }
+
+    // ═══════════════ Room Peers (TOFU) ═══════════════
+
+    /// <summary>
+    /// Lookup a known peer by room and fingerprint for TOFU verification.
+    /// </summary>
+    public async Task<(byte[]? publicKey, string? displayName)> GetRoomPeerAsync(
+        string roomId, string fingerprint, CancellationToken ct = default)
+    {
+        EnsureOpen();
+        await using var cmd = _connection!.CreateCommand();
+        cmd.CommandText = "SELECT public_key, display_name FROM room_peers WHERE room_id = @room AND fingerprint = @fp";
+        cmd.Parameters.AddWithValue("@room", roomId);
+        cmd.Parameters.AddWithValue("@fp", fingerprint);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (await reader.ReadAsync(ct))
+            return ((byte[])reader.GetValue(0), reader.GetString(1));
+        return (null, null);
+    }
+
+    /// <summary>
+    /// Save or update a room peer (for TOFU pinning). Updates last_seen_at on every call.
+    /// </summary>
+    public async Task SaveOrUpdateRoomPeerAsync(
+        string roomId, string fingerprint, string displayName, byte[] publicKey, CancellationToken ct = default)
+    {
+        EnsureOpen();
+        await using var cmd = _connection!.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO room_peers (room_id, fingerprint, display_name, public_key, last_seen_at)
+            VALUES (@room, @fp, @name, @key, @seen)
+            ON CONFLICT(room_id, fingerprint)
+            DO UPDATE SET display_name = @name, last_seen_at = @seen
+            """;
+        cmd.Parameters.AddWithValue("@room", roomId);
+        cmd.Parameters.AddWithValue("@fp", fingerprint);
+        cmd.Parameters.AddWithValue("@name", displayName);
+        cmd.Parameters.AddWithValue("@key", publicKey);
+        cmd.Parameters.AddWithValue("@seen", DateTimeOffset.UtcNow.ToString("O"));
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 
     // ═══════════════ Encrypted Files ═══════════════
@@ -982,14 +1227,17 @@ public sealed class SecureDatabase : IAsyncDisposable
     {
         EnsureOpen();
         await using var cmd = _connection!.CreateCommand();
+        // SECURITY FIX: CWE-312 — Store key hashes in new columns, empty blob in legacy columns
         cmd.CommandText = """
-            INSERT INTO key_rotations (id, room_id, old_public_key, new_public_key, rotation_number, rotated_at, initiator_fingerprint)
-            VALUES (@id, @roomId, @oldKey, @newKey, @num, @at, @initiator)
+            INSERT INTO key_rotations (id, room_id, old_public_key, new_public_key, old_key_hash, new_key_hash, rotation_number, rotated_at, initiator_fingerprint)
+            VALUES (@id, @roomId, @oldKeyLegacy, @newKeyLegacy, @oldHash, @newHash, @num, @at, @initiator)
             """;
         cmd.Parameters.AddWithValue("@id", record.Id);
         cmd.Parameters.AddWithValue("@roomId", record.RoomId);
-        cmd.Parameters.AddWithValue("@oldKey", record.OldPublicKey);
-        cmd.Parameters.AddWithValue("@newKey", record.NewPublicKey);
+        cmd.Parameters.AddWithValue("@oldKeyLegacy", Array.Empty<byte>()); // Empty blob for backwards compat
+        cmd.Parameters.AddWithValue("@newKeyLegacy", Array.Empty<byte>()); // Empty blob for backwards compat
+        cmd.Parameters.AddWithValue("@oldHash", record.OldKeyHash);
+        cmd.Parameters.AddWithValue("@newHash", record.NewKeyHash);
         cmd.Parameters.AddWithValue("@num", record.RotationNumber);
         cmd.Parameters.AddWithValue("@at", record.RotatedAt.ToString("O"));
         cmd.Parameters.AddWithValue("@initiator", (object?)record.InitiatorFingerprint ?? DBNull.Value);
@@ -1086,11 +1334,24 @@ public sealed class SecureDatabase : IAsyncDisposable
 
     // ═══════════════ Helpers ═══════════════
 
-    public async Task ExecuteNonQueryAsync(string sql, CancellationToken ct = default)
+    private async Task ExecuteNonQueryAsync(string sql, CancellationToken ct = default)
     {
         EnsureOpen();
         await using var cmd = _connection!.CreateCommand();
         cmd.CommandText = sql;
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>
+    /// Re-encrypt the database with a new master key using PRAGMA rekey.
+    /// The database must already be open with the current key.
+    /// </summary>
+    public async Task RekeyDatabaseAsync(byte[] newMasterKey, CancellationToken ct = default)
+    {
+        EnsureOpen();
+        var newPassphrase = Convert.ToHexString(newMasterKey);
+        await using var cmd = _connection!.CreateCommand();
+        cmd.CommandText = $"PRAGMA rekey = '{newPassphrase}';";
         await cmd.ExecuteNonQueryAsync(ct);
     }
 

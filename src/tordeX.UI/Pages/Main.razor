@@ -19,7 +19,7 @@ else if (Chat.IsLocked)
             <p class="text-[13px] text-[var(--text-muted)]">Enter your password to unlock</p>
             <form class="w-full flex flex-col items-center gap-3 mt-2" @onsubmit="TryUnlock" @onsubmit:preventDefault>
                 <input type="password" placeholder="Enter password" autofocus
-                       class="w-full h-11 px-4 text-[16px] text-center tracking-[4px] rounded-[var(--radius-md)] border bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] placeholder:tracking-normal outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                       class="w-full h-11 px-4 text-[16px] text-center tracking-[4px] rounded-[var(--radius-md)] border bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] placeholder:tracking-normal outline-none transition-all duration-200 input-focus-ring"
                        style="border-color: @(!string.IsNullOrEmpty(_lockError) ? "var(--danger)" : "var(--border)"); box-shadow: @(!string.IsNullOrEmpty(_lockError) ? "0 0 0 3px rgba(231, 76, 60, 0.3)" : "none");"
                        @bind="_unlockPassword" @bind:event="oninput"
                        @onkeydown="HandleLockKeyDown" />

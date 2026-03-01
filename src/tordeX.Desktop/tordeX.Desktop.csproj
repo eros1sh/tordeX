@@ -29,4 +29,22 @@
     <ProjectReference Include="..\tordeX.UI\tordeX.UI.csproj" />
   </ItemGroup>
 
+  <!-- Embedded Tor binary from Core project — must be alongside published EXE -->
+  <ItemGroup>
+    <Content Include="..\tordeX.Core\tor.exe" Condition="Exists('..\tordeX.Core\tor.exe')">
+      <Link>tor.exe</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!-- Copy tor.exe alongside published EXE after publish (single-file bundles Content, so we force-copy) -->
+  <Target Name="CopyTorAfterPublish" AfterTargets="Publish">
+    <Copy SourceFiles="..\tordeX.Core\tor.exe"
+          DestinationFolder="$(PublishDir)"
+          Condition="Exists('..\tordeX.Core\tor.exe')"
+          SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="Copied tor.exe to $(PublishDir)" />
+  </Target>
+
 </Project>

@@ -151,3 +151,19 @@ window.tordeXAudio = {
         }
     }
 };
+
+/**
+ * tordeX DOM utilities — safe interop functions replacing eval() calls.
+ */
+window.tordeXDom = {
+    /**
+     * Scroll an element to the bottom.
+     * @param {string} elementId - The DOM element ID to scroll
+     */
+    scrollToBottom: function (elementId) {
+        const el = document.getElementById(elementId);
+        if (el) {
+            el.scrollTo(0, el.scrollHeight);
+        }
+    }
+};

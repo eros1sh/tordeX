@@ -4,19 +4,15 @@ using System.Text;
 namespace TordeX.Core.Cryptography;
 
 /// <summary>
-/// Key derivation using Argon2id (memory-hard, GPU-resistant).
-/// Fallback to PBKDF2-SHA512 when Argon2id unavailable.
+/// Key derivation using PBKDF2-SHA512 (600K iterations).
+/// API surface designed for future Argon2id migration when .NET BCL adds support.
 /// </summary>
 public static class KeyDerivation
 {
-    // Argon2id parameters (OWASP recommended minimum)
-    private const int Argon2MemoryKiB = 65536;  // 64 MB
-    private const int Argon2Iterations = 3;
-    private const int Argon2Parallelism = 4;
     private const int SaltLength = 32;
     private const int DerivedKeyLength = 32; // 256-bit
 
-    // PBKDF2 fallback parameters
+    // PBKDF2-SHA512 parameters (current implementation)
     private const int Pbkdf2Iterations = 600_000;
 
     /// <summary>
@@ -47,21 +43,6 @@ public static class KeyDerivation
 
         try
         {
-            // Primary: Argon2id (available in .NET 9)
-            return Rfc9106DeriveBytes.DeriveKey(
-                passwordBytes,
-                salt,
-                new Rfc9106DeriveBytes.Argon2Parameters
-                {
-                    MemorySize = Argon2MemoryKiB,
-                    Iterations = Argon2Iterations,
-                    Parallelism = Argon2Parallelism,
-                    OutputLength = DerivedKeyLength
-                });
-        }
-        catch (PlatformNotSupportedException)
-        {
-            // Fallback: PBKDF2-SHA512 (still strong, but less GPU-resistant)
             return Rfc2898DeriveBytes.Pbkdf2(
                 passwordBytes,
                 salt,
@@ -115,30 +96,3 @@ public static class KeyDerivation
     }
 }
 
-/// <summary>
-/// Argon2id implementation wrapper for .NET 9.
-/// Falls back gracefully if platform doesn't support it.
-/// </summary>
-internal static class Rfc9106DeriveBytes
-{
-    public sealed class Argon2Parameters
-    {
-        public int MemorySize { get; init; } = 65536;
-        public int Iterations { get; init; } = 3;
-        public int Parallelism { get; init; } = 4;
-        public int OutputLength { get; init; } = 32;
-    }
-
-    public static byte[] DeriveKey(byte[] password, byte[] salt, Argon2Parameters parameters)
-    {
-        // .NET 9 does not have built-in Argon2id yet.
-        // Use PBKDF2-SHA512 with high iteration count as strong fallback.
-        // When Argon2id becomes available in BCL, swap this implementation.
-        return Rfc2898DeriveBytes.Pbkdf2(
-            password,
-            salt,
-            600_000,
-            HashAlgorithmName.SHA512,
-            parameters.OutputLength);
-    }
-}

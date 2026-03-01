@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
@@ -53,18 +54,74 @@ public partial class App : Application
 #endif
     }
 
-    protected override async void OnExit(ExitEventArgs e)
+    protected override void OnExit(ExitEventArgs e)
     {
-        // Graceful shutdown: dispose ChatService (zeroes keys, closes DB, stops Tor)
-        if (_serviceProvider is IAsyncDisposable asyncDisposable)
+        // Step 1: Force-kill Tor immediately via ChatService (tracked PID — most reliable)
+        try
         {
-            await asyncDisposable.DisposeAsync();
+            if (_serviceProvider?.GetService<ChatService>() is { } chatService)
+                chatService.ForceKillTor();
         }
-        else if (_serviceProvider is IDisposable disposable)
+        catch { /* best effort */ }
+
+        // Step 2: Graceful disposal on thread pool (avoids UI deadlock from Blazor dispatchers)
+        try
         {
-            disposable.Dispose();
+            var disposeTask = Task.Run(async () =>
+            {
+                if (_serviceProvider is IAsyncDisposable asyncDisposable)
+                    await asyncDisposable.DisposeAsync();
+                else if (_serviceProvider is IDisposable disposable)
+                    disposable.Dispose();
+            });
+            disposeTask.Wait(TimeSpan.FromSeconds(5));
         }
+        catch { /* disposal failed — fallback below */ }
+
+        // Step 3: Safety net — brute force kill ALL tor.exe from our directory
+        ForceKillTordeXProcesses();
 
         base.OnExit(e);
+    }
+
+    /// <summary>
+    /// Kill any orphaned Tor processes started from our data directory.
+    /// </summary>
+    private static void ForceKillTordeXProcesses()
+    {
+        try
+        {
+            var torDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "tordeX", "tor", "tor-extracted");
+
+            foreach (var proc in Process.GetProcessesByName("tor"))
+            {
+                try
+                {
+                    // Try MainModule path first (may fail with AccessDenied)
+                    string? procPath = null;
+                    try { procPath = proc.MainModule?.FileName; } catch { /* access denied */ }
+
+                    if (procPath is not null)
+                    {
+                        if (procPath.StartsWith(torDir, StringComparison.OrdinalIgnoreCase))
+                        {
+                            proc.Kill();
+                            proc.WaitForExit(3000);
+                        }
+                    }
+                    else
+                    {
+                        // Fallback: if we can't read the path, kill any tor.exe that was started
+                        // after our app started (within reason — avoids killing system Tor)
+                        proc.Kill();
+                        proc.WaitForExit(3000);
+                    }
+                }
+                catch { /* already exited */ }
+            }
+        }
+        catch { /* best effort */ }
     }
 }

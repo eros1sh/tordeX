@@ -259,6 +259,72 @@ dotnet test src/tordeX.Tests/tordeX.Tests.csproj
 
 ---
 
+## 🔧 Troubleshooting Connection Issues
+
+If you cannot connect between two devices, follow these steps:
+
+### 1. Check Tor Connection
+
+Both devices must show **"Tor Connected"** (green indicator). If not:
+- Wait 30-60 seconds for Tor bootstrap (first launch downloads Tor binaries)
+- Check your internet connection
+- Try restarting the application
+- Check if antivirus/firewall is blocking Tor (`tor.exe`)
+
+### 2. Verify Your .onion Address
+
+In the app settings or logs, verify each device has a unique `.onion` address:
+```
+Hidden service created: abc123...xyz.onion
+```
+
+### 3. Connection Checklist
+
+**Device A (Room Creator):**
+1. Create a room
+2. Copy the invite link (e.g., `tordex://join/room-id/token/abc123...xyz.onion`)
+3. Share the complete link with Device B
+
+**Device B (Joiner):**
+1. Click "Join Room"
+2. Paste the complete invite link
+3. Enter the room password
+
+### 4. Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| "Could not reach peer" | Both devices need Tor fully started. Wait 30s after login. |
+| Connection times out | Check firewall rules. Ensure `tor.exe` can access internet. |
+| Same PC testing fails | Two instances can't share port 19876. Use different PCs or VMs. |
+| Messages not delivering | Check that both users unlocked the room with correct password. |
+
+### 5. Debug Logging
+
+Logs are stored in `%APPDATA%/tordeX/`:
+```
+%APPDATA%/tordeX/
+├── logs/
+│   └── tordeX_YYYY-MM-DD.log
+```
+
+Check for errors like:
+- `SOCKS5 connection failed` → Tor not running
+- `Invalid handshake` → Wrong room password
+- `Peer connection failed` → Network/firewall issue
+
+### 6. Port Information
+
+The application uses these ports dynamically:
+- **P2P Local Port**: Random port (usually 19876-19976)
+- **Tor SOCKS Port**: Random port (usually 9050-9150)  
+- **Tor Control Port**: Random port (usually 9051-9151)
+- **Hidden Service Virtual Port**: Fixed 19876 (external)
+
+Ensure no other application is blocking these ports.
+
+---
+
 ## Architecture
 
 ### System Overview

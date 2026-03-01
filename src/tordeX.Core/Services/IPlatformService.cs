@@ -16,4 +16,9 @@ public interface IPlatformService
     /// Requests the application to shut down gracefully.
     /// </summary>
     void RequestShutdown();
+
+    /// <summary>
+    /// Copies text to the system clipboard.
+    /// </summary>
+    Task CopyToClipboardAsync(string text);
 }

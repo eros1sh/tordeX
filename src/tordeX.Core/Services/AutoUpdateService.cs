@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace TordeX.Core.Services;
@@ -15,6 +16,15 @@ public sealed class AutoUpdateService : IDisposable
         "https://api.github.com/repos/eros1sh/tordeX/releases/latest";
 
     private const string UserAgent = "tordeX-updater";
+
+    /// <summary>
+    /// ECDSA P-256 public key for verifying update signatures (base64-encoded DER SubjectPublicKeyInfo).
+    /// Generate a new keypair with GenerateSigningKeyPair() and embed the public key here.
+    /// </summary>
+    private const string UpdateVerificationPublicKey =
+        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE" +
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
 
     private readonly HttpClient _http;
     private CancellationTokenSource? _downloadCts;
@@ -180,6 +190,18 @@ public sealed class AutoUpdateService : IDisposable
                 return false;
             }
 
+            // SECURITY FIX: CWE-494 — Verify cryptographic signature of downloaded update
+            var exeData = await File.ReadAllBytesAsync(tempPath, ct).ConfigureAwait(false);
+            var sigVerified = await VerifyUpdateSignatureAsync(exeData, ct).ConfigureAwait(false);
+            if (!sigVerified)
+            {
+                ErrorMessage = "Update signature verification failed — update rejected for security.";
+                IsDownloading = false;
+                NotifyStateChanged();
+                TryDeleteFile(tempPath);
+                return false;
+            }
+
             // Swap: rename current → .old, move downloaded → current path
             var oldPath = currentExePath + ".old";
             TryDeleteFile(oldPath);
@@ -250,6 +272,59 @@ public sealed class AutoUpdateService : IDisposable
         _downloadCts?.Cancel();
         _downloadCts?.Dispose();
         _http.Dispose();
+    }
+
+    /// <summary>
+    /// Download and verify the .sig file for the update EXE.
+    /// The .sig file is a base64-encoded ECDSA P-256 signature over SHA-256(exeData).
+    /// </summary>
+    private async Task<bool> VerifyUpdateSignatureAsync(byte[] exeData, CancellationToken ct)
+    {
+        try
+        {
+            // Download signature file
+            var sigUrl = DownloadUrl + ".sig";
+            var sigResponse = await _http.GetAsync(sigUrl, ct).ConfigureAwait(false);
+            if (!sigResponse.IsSuccessStatusCode)
+            {
+                Debug.WriteLine($"[AutoUpdate] Signature file not found at {sigUrl}");
+                return false;
+            }
+
+            var sigBase64 = (await sigResponse.Content.ReadAsStringAsync(ct)
+                .ConfigureAwait(false)).Trim();
+            var signature = Convert.FromBase64String(sigBase64);
+
+            return VerifyUpdateSignature(exeData, signature);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or FormatException or CryptographicException)
+        {
+            Debug.WriteLine($"[AutoUpdate] Signature verification failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Verify ECDSA P-256 signature over SHA-256 hash of the EXE data.
+    /// </summary>
+    private static bool VerifyUpdateSignature(byte[] exeData, byte[] signature)
+    {
+        using var ecdsa = ECDsa.Create();
+        ecdsa.ImportSubjectPublicKeyInfo(Convert.FromBase64String(UpdateVerificationPublicKey), out _);
+        return ecdsa.VerifyData(exeData, signature, HashAlgorithmName.SHA256);
+    }
+
+    /// <summary>
+    /// Utility: Generate a new ECDSA P-256 signing keypair for release signing.
+    /// The public key should be embedded in UpdateVerificationPublicKey.
+    /// NOT shipped in production — for developer use only.
+    /// </summary>
+    public static (string publicKeyBase64, string privateKeyBase64) GenerateSigningKeyPair()
+    {
+        using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var publicKey = Convert.ToBase64String(ecdsa.ExportSubjectPublicKeyInfo());
+        var privateKey = Convert.ToBase64String(ecdsa.ExportPkcs8PrivateKey());
+        return (publicKey, privateKey);
     }
 
     private void NotifyStateChanged() => OnStateChanged?.Invoke();

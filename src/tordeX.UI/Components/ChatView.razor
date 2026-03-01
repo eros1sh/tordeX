@@ -55,6 +55,17 @@
             </svg>
             E2E
         </span>
+        @{ var peerCount = Chat.GetRoomPeerCount(Room.Id); }
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-[var(--radius-sm)] text-[11px] font-medium @(peerCount > 0 ? "bg-success-subtle text-[var(--success)]" : "text-[var(--text-muted)]")"
+              title="@(peerCount > 0 ? string.Join(", ", Chat.GetRoomPeerNames(Room.Id)) : "No peers connected")">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+            @(peerCount > 0 ? $"{peerCount} peer(s)" : "Offline")
+        </span>
     </div>
     <div class="flex items-center gap-1">
         <button class="p-2 rounded-[var(--radius-sm)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer bg-transparent border-none"
@@ -245,9 +256,11 @@
                                             }
                                         </button>
                                         <div class="voice-waveform">
+                                            @{ var waveHash = msg.Id.GetHashCode(); }
                                             @for (int i = 0; i < 20; i++)
                                             {
-                                                <div class="voice-bar" style="height: @(8 + Random.Shared.Next(16))px;@(_playingMessageId == msg.Id ? " background: var(--accent);" : "")"></div>
+                                                var barHeight = 8 + Math.Abs((waveHash * 31 + i * 7) % 16);
+                                                <div class="voice-bar" style="height: @(barHeight)px;@(_playingMessageId == msg.Id ? " background: var(--accent);" : "")"></div>
                                             }
                                         </div>
                                         <span class="voice-duration">@FormatDuration(msg.VoiceDuration ?? 0)</span>
@@ -279,7 +292,7 @@
                                 <div class="flex items-center gap-1 mt-1 px-1">
                                     @foreach (var reaction in msg.Reactions)
                                     {
-                                        var isOwn = reaction.Value.Contains(Chat.CurrentUser?.Id ?? "");
+                                        var isOwn = reaction.Value.Contains(Chat.UserFingerprint ?? "");
                                         <button class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] rounded-full border cursor-pointer bg-transparent @(isOwn ? "border-[var(--accent)] bg-[var(--accent-glow)]" : "border-[var(--border)] bg-[var(--bg-tertiary)]")"
                                                 @onclick="() => ToggleReaction(msg, reaction.Key)">
                                             <span>@reaction.Key</span>
@@ -565,7 +578,7 @@
             </button>
         </div>
 
-        <div class="flex-1 flex items-end rounded-[var(--radius-lg)] bg-[var(--bg-tertiary)] border border-[var(--border)] focus-within:border-[var(--accent)] focus-within:shadow-[0_0_0_3px_var(--accent-glow)] transition-all duration-200 px-3 py-2">
+        <div class="flex-1 flex items-end rounded-[var(--radius-lg)] bg-[var(--bg-tertiary)] border border-[var(--border)] input-focus-ring transition-all duration-200 px-3 py-2">
             <textarea class="flex-1 bg-transparent text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none resize-none leading-relaxed"
                       rows="1" placeholder="Type a message..." style="max-height: 120px;"
                       @bind="_messageText" @bind:event="oninput"
@@ -783,8 +796,8 @@
     {
         try
         {
-            await JS.InvokeVoidAsync("eval",
-                "document.getElementById('chat-messages')?.scrollTo(0, document.getElementById('chat-messages')?.scrollHeight ?? 0)");
+            // SECURITY FIX: CWE-95 — replaced eval() with safe JS interop
+            await JS.InvokeVoidAsync("tordeXDom.scrollToBottom", "chat-messages");
         }
         catch { }
     }
@@ -1183,7 +1196,7 @@
         try
         {
             await Chat.AddReactionAsync(msg.Id, Room.Id, emoji);
-            var fp = Chat.CurrentUser?.Id ?? "";
+            var fp = Chat.UserFingerprint ?? "";
             msg.Reactions ??= new Dictionary<string, List<string>>();
             if (!msg.Reactions.ContainsKey(emoji))
                 msg.Reactions[emoji] = [];
@@ -1197,7 +1210,7 @@
 
     private async Task ToggleReaction(ChatMessage msg, string emoji)
     {
-        var fp = Chat.CurrentUser?.Id ?? "";
+        var fp = Chat.UserFingerprint ?? "";
         if (msg.Reactions?.ContainsKey(emoji) == true && msg.Reactions[emoji].Contains(fp))
         {
             try
@@ -1225,6 +1238,7 @@
         {
             await Chat.ToggleBookmarkAsync(msg, Room.Name);
             msg.IsBookmarked = !msg.IsBookmarked;
+            _bookmarks = await Chat.GetBookmarksAsync();
             StateHasChanged();
         }
         catch (Exception ex) { AddSystemMessage($"Bookmark failed: {ex.Message}"); }

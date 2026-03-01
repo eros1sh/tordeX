@@ -280,6 +280,22 @@ public static class LocalizationService
         ["InviteLinkDetected"] = "Invite link detected",
         ["RoomNameOptional"] = "Room Name (optional)",
         ["RoomNameOptionalPlaceholder"] = "Display name for this room",
+
+        // ──────────────── Direct Messages ────────────────
+        ["Rooms"] = "Rooms",
+        ["DirectMessages"] = "Direct Messages",
+        ["NewDM"] = "New DM",
+        ["DmToken"] = "DM Token",
+        ["DmTokenDesc"] = "Share this token so others can message you directly.",
+        ["PasteDmToken"] = "Paste DM token (tordex://dm/...)",
+        ["DmTokenDetected"] = "DM token detected",
+        ["InvalidDmToken"] = "Invalid DM token format.",
+        ["CannotDmSelf"] = "Cannot send a DM to yourself.",
+        ["StartDirectMessage"] = "Start DM",
+        ["NoDmsYet"] = "No direct messages yet.",
+        ["ShareTokenHint"] = "Share your DM token to start chatting.",
+        ["Copied"] = "Copied!",
+        ["CopyToken"] = "Copy Token",
     }.ToFrozenDictionary(StringComparer.Ordinal);
 
     private static readonly FrozenDictionary<string, string> TrStrings = new Dictionary<string, string>
@@ -552,6 +568,22 @@ public static class LocalizationService
         ["InviteLinkDetected"] = "Davet bağlantısı algılandı",
         ["RoomNameOptional"] = "Oda Adı (isteğe bağlı)",
         ["RoomNameOptionalPlaceholder"] = "Bu oda için görünen ad",
+
+        // ──────────────── Doğrudan Mesajlar ────────────────
+        ["Rooms"] = "Odalar",
+        ["DirectMessages"] = "Doğrudan Mesajlar",
+        ["NewDM"] = "Yeni DM",
+        ["DmToken"] = "DM Tokeni",
+        ["DmTokenDesc"] = "Bu tokeni paylaşarak başkalarının size doğrudan mesaj atmasını sağlayın.",
+        ["PasteDmToken"] = "DM tokeni yapıştırın (tordex://dm/...)",
+        ["DmTokenDetected"] = "DM tokeni algılandı",
+        ["InvalidDmToken"] = "Geçersiz DM token formatı.",
+        ["CannotDmSelf"] = "Kendinize DM gönderemezsiniz.",
+        ["StartDirectMessage"] = "DM Başlat",
+        ["NoDmsYet"] = "Henüz doğrudan mesaj yok.",
+        ["ShareTokenHint"] = "Sohbet başlatmak için DM tokeninizi paylaşın.",
+        ["Copied"] = "Kopyalandı!",
+        ["CopyToken"] = "Tokeni Kopyala",
     }.ToFrozenDictionary(StringComparer.Ordinal);
 
     private static readonly FrozenDictionary<string, FrozenDictionary<string, string>> Languages =

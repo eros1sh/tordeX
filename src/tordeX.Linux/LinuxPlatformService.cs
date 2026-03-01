@@ -17,4 +17,32 @@ public sealed class LinuxPlatformService : IPlatformService
     {
         Environment.Exit(0);
     }
+
+    public Task CopyToClipboardAsync(string text)
+    {
+        // Use xclip or xsel on Linux
+        try
+        {
+            var process = new System.Diagnostics.Process
+            {
+                StartInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "xclip",
+                    Arguments = "-selection clipboard",
+                    RedirectStandardInput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                }
+            };
+            process.Start();
+            process.StandardInput.Write(text);
+            process.StandardInput.Close();
+            process.WaitForExit(2000);
+        }
+        catch
+        {
+            // xclip not available — silently fail
+        }
+        return Task.CompletedTask;
+    }
 }

@@ -25,6 +25,10 @@ public sealed class ChatRoom
     // Onion address for P2P hosting
     public string? OnionAddress { get; set; }
 
+    // Direct Message fields
+    public bool IsDm { get; set; }
+    public string? PeerFingerprint { get; set; }
+
     /// <summary>
     /// Known peers in this room (public key fingerprints).
     /// </summary>

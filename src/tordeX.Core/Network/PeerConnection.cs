@@ -21,9 +21,12 @@ public sealed class PeerConnection : IAsyncDisposable
     private bool _disposed;
     private CancellationTokenSource? _cts;
 
+    private bool _handshakeComplete;
+
     public string PeerFingerprint { get; private set; } = string.Empty;
     public string PeerDisplayName { get; private set; } = string.Empty;
     public byte[] PeerPublicKey { get; private set; } = [];
+    public string? PeerOnionAddress { get; private set; }
     public bool IsConnected { get; private set; }
     public byte[] SessionKey { get; private set; } = [];
 
@@ -69,21 +72,23 @@ public sealed class PeerConnection : IAsyncDisposable
     /// <summary>
     /// Perform key exchange handshake with peer.
     /// </summary>
-    public async Task HandshakeAsync(IdentityManager identity, string displayName, string roomId, CancellationToken ct = default)
+    public async Task HandshakeAsync(IdentityManager identity, string displayName, string roomId,
+        string? ourOnionAddress = null, CancellationToken ct = default)
     {
         if (!IsConnected || _stream is null)
             throw new InvalidOperationException("Not connected.");
 
         using var keyExchange = new KeyExchange();
 
-        // Send our handshake
+        // Send our handshake (includes our .onion for bidirectional discovery)
         var handshakePayload = new HandshakePayload
         {
             ProtocolVersion = "tordeX/1.0",
             PublicKey = identity.PublicKey,
             EphemeralPublicKey = keyExchange.PublicKey,
             DisplayName = displayName,
-            RoomId = roomId
+            RoomId = roomId,
+            OnionAddress = ourOnionAddress
         };
 
         var payloadBytes = MessagePackSerializer.Serialize(handshakePayload);
@@ -116,9 +121,11 @@ public sealed class PeerConnection : IAsyncDisposable
         PeerPublicKey = peerHandshake.PublicKey;
         PeerFingerprint = IdentityManager.ComputeFingerprint(PeerPublicKey);
         PeerDisplayName = peerHandshake.DisplayName;
+        PeerOnionAddress = peerHandshake.OnionAddress;
 
         // Derive shared session key
         SessionKey = keyExchange.DeriveSharedSecret(peerHandshake.EphemeralPublicKey);
+        _handshakeComplete = true;
     }
 
     /// <summary>
@@ -126,7 +133,8 @@ public sealed class PeerConnection : IAsyncDisposable
     /// Receives the peer's handshake first, then sends ours.
     /// Returns the room ID from the peer's handshake.
     /// </summary>
-    public async Task<string> RespondToHandshakeAsync(IdentityManager identity, string displayName, CancellationToken ct = default)
+    public async Task<string> RespondToHandshakeAsync(IdentityManager identity, string displayName,
+        string? ourOnionAddress = null, CancellationToken ct = default)
     {
         if (!IsConnected || _stream is null)
             throw new InvalidOperationException("Not connected.");
@@ -143,14 +151,15 @@ public sealed class PeerConnection : IAsyncDisposable
 
         using var keyExchange = new KeyExchange();
 
-        // Send our handshake response
+        // Send our handshake response (includes our .onion for bidirectional discovery)
         var responsePayload = new HandshakePayload
         {
             ProtocolVersion = "tordeX/1.0",
             PublicKey = identity.PublicKey,
             EphemeralPublicKey = keyExchange.PublicKey,
             DisplayName = displayName,
-            RoomId = peerHandshake.RoomId
+            RoomId = peerHandshake.RoomId,
+            OnionAddress = ourOnionAddress
         };
 
         var payloadBytes = MessagePackSerializer.Serialize(responsePayload);
@@ -173,9 +182,11 @@ public sealed class PeerConnection : IAsyncDisposable
         PeerPublicKey = peerHandshake.PublicKey;
         PeerFingerprint = IdentityManager.ComputeFingerprint(PeerPublicKey);
         PeerDisplayName = peerHandshake.DisplayName;
+        PeerOnionAddress = peerHandshake.OnionAddress;
 
         // Derive shared session key
         SessionKey = keyExchange.DeriveSharedSecret(peerHandshake.EphemeralPublicKey);
+        _handshakeComplete = true;
 
         return peerHandshake.RoomId;
     }
@@ -237,6 +248,12 @@ public sealed class PeerConnection : IAsyncDisposable
 
         var data = MessagePackSerializer.Serialize(message);
 
+        // SECURITY FIX: CWE-319 — Encrypt transport with session key after handshake
+        if (_handshakeComplete && SessionKey.Length > 0)
+        {
+            data = Cryptography.MessageEncryption.Encrypt(data, SessionKey);
+        }
+
         // Length-prefixed framing: [4-byte big-endian length][payload]
         var lengthPrefix = BitConverter.GetBytes(System.Net.IPAddress.HostToNetworkOrder(data.Length));
         await _stream.WriteAsync(lengthPrefix, ct);
@@ -255,13 +272,19 @@ public sealed class PeerConnection : IAsyncDisposable
 
         var length = System.Net.IPAddress.NetworkToHostOrder(BitConverter.ToInt32(lengthBuffer, 0));
 
-        // Protect against oversized messages (max 10 MB)
-        if (length <= 0 || length > 10 * 1024 * 1024)
+        // Protect against oversized messages (max 10 MB + encryption overhead)
+        if (length <= 0 || length > 10 * 1024 * 1024 + 28)
             throw new InvalidOperationException($"Invalid message length: {length}");
 
         var buffer = new byte[length];
         bytesRead = await ReadExactAsync(_stream, buffer, length, ct);
         if (bytesRead < length) return null;
+
+        // SECURITY FIX: CWE-319 — Decrypt transport with session key after handshake
+        if (_handshakeComplete && SessionKey.Length > 0)
+        {
+            buffer = Cryptography.MessageEncryption.Decrypt(buffer, SessionKey);
+        }
 
         return MessagePackSerializer.Deserialize<P2PMessage>(buffer);
     }
@@ -286,7 +309,15 @@ public sealed class PeerConnection : IAsyncDisposable
         if (_client is null) throw new InvalidOperationException("TcpClient not created.");
 
         // Connect to Tor SOCKS5 proxy
-        await _client.ConnectAsync("127.0.0.1", _socksPort, ct);
+        // IMPORTANT: Use 127.0.0.1 explicitly (not localhost) to ensure IPv4
+        try
+        {
+            await _client.ConnectAsync("127.0.0.1", _socksPort, ct);
+        }
+        catch (SocketException ex)
+        {
+            throw new InvalidOperationException($"Failed to connect to Tor SOCKS proxy at 127.0.0.1:{_socksPort}. Is Tor running? Error: {ex.Message}", ex);
+        }
         var stream = _client.GetStream();
 
         // SOCKS5 greeting: version + auth methods
@@ -315,12 +346,41 @@ public sealed class PeerConnection : IAsyncDisposable
 
         await stream.WriteAsync(request, ct);
 
-        // Read connection response (at least 10 bytes)
-        var connResponse = new byte[10];
-        await ReadExactAsync(stream, connResponse, 10, ct);
+        // Read SOCKS5 connection response header (4 bytes: VER, REP, RSV, ATYP)
+        var headerBuf = new byte[4];
+        await ReadExactAsync(stream, headerBuf, 4, ct);
 
-        if (connResponse[1] != 0x00)
-            throw new InvalidOperationException($"SOCKS5 connection failed with code: {connResponse[1]}");
+        if (headerBuf[1] != 0x00)
+            throw new InvalidOperationException($"SOCKS5 connection failed with code: {headerBuf[1]}");
+
+        // Read remaining bytes based on address type (ATYP)
+        // SOCKS5 response: [VER, REP, RSV, ATYP, ADDR..., PORT(2 bytes)]
+        int remainingBytes = headerBuf[3] switch
+        {
+            0x01 => 4 + 2,  // IPv4: 4 bytes addr + 2 bytes port
+            0x04 => 16 + 2, // IPv6: 16 bytes addr + 2 bytes port
+            0x03 => -1,     // Domain: need to read length byte first
+            _ => throw new InvalidOperationException($"Unknown SOCKS5 address type: {headerBuf[3]}")
+        };
+
+        if (headerBuf[3] == 0x03)
+        {
+            // Domain type: read length byte first
+            var lenBuf = new byte[1];
+            await ReadExactAsync(stream, lenBuf, 1, ct);
+            int domainLen = lenBuf[0];
+            
+            // Read domain + 2 bytes port
+            var domainBuf = new byte[domainLen + 2];
+            await ReadExactAsync(stream, domainBuf, domainLen + 2, ct);
+            // domainBuf[0..domainLen] = domain, domainBuf[domainLen..domainLen+2] = port
+        }
+        else
+        {
+            // IPv4 or IPv6: read fixed-size address + port
+            var addrBuf = new byte[remainingBytes];
+            await ReadExactAsync(stream, addrBuf, remainingBytes, ct);
+        }
     }
 
     public async ValueTask DisposeAsync()
@@ -332,6 +392,7 @@ public sealed class PeerConnection : IAsyncDisposable
         _cts?.Dispose();
         _cts = null;
 
+        var wasConnected = IsConnected;
         IsConnected = false;
 
         if (_stream is not null)
@@ -344,5 +405,11 @@ public sealed class PeerConnection : IAsyncDisposable
         _client = null;
 
         CryptographicOperations.ZeroMemory(SessionKey);
+
+        // Fire Disconnected so P2PServer releases its semaphore slot
+        if (wasConnected)
+        {
+            try { Disconnected?.Invoke(this); } catch { /* best effort */ }
+        }
     }
 }

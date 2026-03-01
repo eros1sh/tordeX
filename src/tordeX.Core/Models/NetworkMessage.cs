@@ -114,4 +114,11 @@ public sealed class HandshakePayload
 
     [Key(4)]
     public required string RoomId { get; set; }
+
+    /// <summary>
+    /// Peer's .onion address for bidirectional discovery.
+    /// Allows both sides to reconnect to each other.
+    /// </summary>
+    [Key(5)]
+    public string? OnionAddress { get; set; }
 }

@@ -3,6 +3,7 @@
 @inject ChatService Chat
 @inject AutoUpdateService Updater
 @inject IPlatformService Platform
+@implements IDisposable
 
 <div class="flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-primary)]">
 
@@ -85,9 +86,15 @@
             }
             else if (Chat.IsTorConnected)
             {
-                <div class="flex items-center gap-2 px-1 py-0.5 rounded-[var(--radius-sm)] bg-success-subtle">
-                    <span class="w-2 h-2 rounded-full bg-[var(--success)] shadow-[0_0_6px_var(--success)]"></span>
-                    <span class="text-[12px] text-[var(--success)] font-medium">@L("TorConnected")</span>
+                <div class="flex flex-col gap-0.5 px-1 py-0.5 rounded-[var(--radius-sm)] bg-success-subtle">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-[var(--success)]" style="box-shadow: 0 0 6px var(--success);"></span>
+                        <span class="text-[12px] text-[var(--success)] font-medium">@L("TorConnected")</span>
+                    </div>
+                    @if (Chat.OnionAddress is not null)
+                    {
+                        <span class="text-[9px] text-[var(--text-muted)] font-mono truncate pl-4" title="@Chat.OnionAddress">@Chat.OnionAddress[..16]...</span>
+                    }
                 </div>
             }
             else if (_torError is not null)
@@ -115,70 +122,150 @@
             }
         </div>
 
-        <!-- Room List -->
+        <!-- Tab Toggle: Rooms / DMs -->
+        <div class="flex border-b border-[var(--border)]">
+            <button class="flex-1 py-2 text-[12px] font-semibold text-center cursor-pointer transition-colors duration-200 border-none"
+                    style="background: transparent; color: @(_sidebarTab == "rooms" ? "var(--accent)" : "var(--text-muted)"); border-bottom: 2px solid @(_sidebarTab == "rooms" ? "var(--accent)" : "transparent");"
+                    @onclick='() => _sidebarTab = "rooms"'>
+                @L("Rooms")
+            </button>
+            <button class="flex-1 py-2 text-[12px] font-semibold text-center cursor-pointer transition-colors duration-200 border-none relative"
+                    style="background: transparent; color: @(_sidebarTab == "dms" ? "var(--accent)" : "var(--text-muted)"); border-bottom: 2px solid @(_sidebarTab == "dms" ? "var(--accent)" : "transparent");"
+                    @onclick='() => _sidebarTab = "dms"'>
+                @L("DirectMessages")
+                @if (_rooms.Where(r => r.IsDm && r.UnreadCount > 0).Sum(r => r.UnreadCount) is var dmUnread && dmUnread > 0)
+                {
+                    <span class="absolute top-1 right-2 flex items-center justify-center w-4 h-4 rounded-full bg-[var(--accent)] text-[#fff] text-[9px] font-semibold">@dmUnread</span>
+                }
+            </button>
+        </div>
+
+        <!-- Room List / DM List -->
         <div class="flex-1 overflow-y-auto py-2">
-            @if (_rooms.Count == 0)
+            @if (_sidebarTab == "rooms")
             {
-                <div class="flex flex-col items-center justify-center h-full px-4 text-center">
-                    <p class="text-[13px] text-[var(--text-muted)]">@L("NoRoomsYet")</p>
-                    <p class="text-[12px] text-[var(--text-muted)] mt-1">@L("CreateOrJoinRoom")</p>
-                </div>
+                var roomList = _rooms.Where(r => !r.IsDm).ToList();
+                @if (roomList.Count == 0)
+                {
+                    <div class="flex flex-col items-center justify-center h-full px-4 text-center">
+                        <p class="text-[13px] text-[var(--text-muted)]">@L("NoRoomsYet")</p>
+                        <p class="text-[12px] text-[var(--text-muted)] mt-1">@L("CreateOrJoinRoom")</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="flex flex-col">
+                        @foreach (var room in roomList)
+                        {
+                            <button class="flex items-center gap-3 px-3 py-2.5 transition-colors duration-150 cursor-pointer bg-transparent border-none w-full text-left"
+                                    style="background: @(room.Id == _selectedRoomId ? "var(--bg-active)" : "transparent"); border-left: 3px solid @(room.Id == _selectedRoomId ? "var(--accent)" : "transparent");"
+                                    @onclick="() => SelectRoom(room)"
+                                    @oncontextmenu="(e) => ShowRoomContextMenu(e, room)" @oncontextmenu:preventDefault="true">
+                                <div class="w-10 h-10 rounded-[var(--radius-md)] flex items-center justify-center shrink-0 bg-[var(--accent-glow)]">
+                                    <span class="text-[16px] font-semibold text-[var(--accent)]">@(room.Name.Length > 0 ? room.Name[0].ToString().ToUpper() : "?")</span>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-[14px] font-semibold text-[var(--text-primary)] truncate">@room.Name</span>
+                                    </div>
+                                    <div class="flex items-center gap-1 mt-0.5">
+                                        @if (_roomPasswords.ContainsKey(room.Id))
+                                        {
+                                            <span class="text-[11px] px-1.5 py-0.5 rounded-[var(--radius-sm)] bg-success-subtle-12 text-[var(--success)]">@L("Unlocked")</span>
+                                        }
+                                        else
+                                        {
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                            </svg>
+                                            <span class="text-[11px] text-[var(--text-muted)]">@L("Locked")</span>
+                                        }
+                                    </div>
+                                </div>
+                                @if (room.UnreadCount > 0)
+                                {
+                                    <span class="flex items-center justify-center badge-min-w h-5 px-1.5 rounded-full bg-[var(--accent)] text-[#fff] text-[11px] font-semibold">@room.UnreadCount</span>
+                                }
+                            </button>
+                        }
+                    </div>
+                }
             }
             else
             {
-                <div class="flex flex-col">
-                    @foreach (var room in _rooms)
-                    {
-                        <button class="flex items-center gap-3 px-3 py-2.5 transition-colors duration-150 cursor-pointer bg-transparent border-none w-full text-left"
-                                style="background: @(room.Id == _selectedRoomId ? "var(--bg-active)" : "transparent"); border-left: 3px solid @(room.Id == _selectedRoomId ? "var(--accent)" : "transparent");"
-                                @onclick="() => SelectRoom(room)"
-                                @oncontextmenu="(e) => ShowRoomContextMenu(e, room)" @oncontextmenu:preventDefault="true">
-                            <div class="w-10 h-10 rounded-[var(--radius-md)] flex items-center justify-center shrink-0 bg-[var(--accent-glow)]">
-                                <span class="text-[16px] font-semibold text-[var(--accent)]">@(room.Name.Length > 0 ? room.Name[0].ToString().ToUpper() : "?")</span>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-center gap-2">
-                                    <span class="text-[14px] font-semibold text-[var(--text-primary)] truncate">@room.Name</span>
+                <!-- DM List -->
+                var dmList = _rooms.Where(r => r.IsDm).ToList();
+                @if (dmList.Count == 0)
+                {
+                    <div class="flex flex-col items-center justify-center h-full px-4 text-center">
+                        <p class="text-[13px] text-[var(--text-muted)]">@L("NoDmsYet")</p>
+                        <p class="text-[12px] text-[var(--text-muted)] mt-1">@L("ShareTokenHint")</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="flex flex-col">
+                        @foreach (var dm in dmList)
+                        {
+                            <button class="flex items-center gap-3 px-3 py-2.5 transition-colors duration-150 cursor-pointer bg-transparent border-none w-full text-left"
+                                    style="background: @(dm.Id == _selectedRoomId ? "var(--bg-active)" : "transparent"); border-left: 3px solid @(dm.Id == _selectedRoomId ? "var(--accent)" : "transparent");"
+                                    @onclick="() => SelectDm(dm)"
+                                    @oncontextmenu="(e) => ShowRoomContextMenu(e, dm)" @oncontextmenu:preventDefault="true">
+                                <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-[var(--accent-glow)]">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                        <circle cx="12" cy="7" r="4"/>
+                                    </svg>
                                 </div>
-                                <div class="flex items-center gap-1 mt-0.5">
-                                    @if (_roomPasswords.ContainsKey(room.Id))
-                                    {
-                                        <span class="text-[11px] px-1.5 py-0.5 rounded-[var(--radius-sm)] bg-success-subtle-12 text-[var(--success)]">@L("Unlocked")</span>
-                                    }
-                                    else
-                                    {
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                                        </svg>
-                                        <span class="text-[11px] text-[var(--text-muted)]">@L("Locked")</span>
-                                    }
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-[14px] font-semibold text-[var(--text-primary)] truncate">@dm.Name</span>
+                                    </div>
+                                    <div class="flex items-center gap-1 mt-0.5">
+                                        <span class="w-2 h-2 rounded-full @(dm.PeerFingerprint is not null && Chat.GetRoomPeerCount(dm.Id) > 0 ? "bg-[var(--success)]" : "bg-[var(--text-muted)]")" style="@(dm.PeerFingerprint is not null && Chat.GetRoomPeerCount(dm.Id) > 0 ? "box-shadow: 0 0 4px var(--success);" : "")"></span>
+                                        <span class="text-[11px] text-[var(--text-muted)]">@(dm.PeerFingerprint is not null && Chat.GetRoomPeerCount(dm.Id) > 0 ? "Online" : "Offline")</span>
+                                    </div>
                                 </div>
-                            </div>
-                            @if (room.UnreadCount > 0)
-                            {
-                                <span class="flex items-center justify-center badge-min-w h-5 px-1.5 rounded-full bg-[var(--accent)] text-[#fff] text-[11px] font-semibold">@room.UnreadCount</span>
-                            }
-                        </button>
-                    }
-                </div>
+                                @if (dm.UnreadCount > 0)
+                                {
+                                    <span class="flex items-center justify-center badge-min-w h-5 px-1.5 rounded-full bg-[var(--accent)] text-[#fff] text-[11px] font-semibold">@dm.UnreadCount</span>
+                                }
+                            </button>
+                        }
+                    </div>
+                }
             }
         </div>
 
         <!-- Action Buttons -->
         <div class="px-3 py-3 border-t border-[var(--border)] flex flex-col gap-1.5">
-            <button class="w-full flex items-center justify-center gap-2 h-9 rounded-[var(--radius-md)] bg-[var(--accent)] text-[#fff] text-[13px] font-semibold cursor-pointer transition-colors duration-200 hover:bg-[var(--accent-light)] active:bg-[var(--accent-dark)] border-none"
-                    @onclick="ShowCreateRoomDialog">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                @L("NewRoom")
-            </button>
-            <button class="w-full flex items-center justify-center gap-2 h-9 rounded-[var(--radius-md)] border border-[var(--border-light)] bg-transparent text-[var(--text-secondary)] text-[13px] font-semibold cursor-pointer transition-colors duration-200 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
-                    @onclick="ShowJoinRoomDialog">
-                @L("JoinRoom")
-            </button>
+            @if (_sidebarTab == "rooms")
+            {
+                <button class="w-full flex items-center justify-center gap-2 h-9 rounded-[var(--radius-md)] bg-[var(--accent)] text-[#fff] text-[13px] font-semibold cursor-pointer transition-colors duration-200 hover:bg-[var(--accent-light)] active:bg-[var(--accent-dark)] border-none"
+                        @onclick="ShowCreateRoomDialog">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    @L("NewRoom")
+                </button>
+                <button class="w-full flex items-center justify-center gap-2 h-9 rounded-[var(--radius-md)] border border-[var(--border-light)] bg-transparent text-[var(--text-secondary)] text-[13px] font-semibold cursor-pointer transition-colors duration-200 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                        @onclick="ShowJoinRoomDialog">
+                    @L("JoinRoom")
+                </button>
+            }
+            else
+            {
+                <button class="w-full flex items-center justify-center gap-2 h-9 rounded-[var(--radius-md)] bg-[var(--accent)] text-[#fff] text-[13px] font-semibold cursor-pointer transition-colors duration-200 hover:bg-[var(--accent-light)] active:bg-[var(--accent-dark)] border-none"
+                        @onclick="ShowNewDmDialog">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    @L("NewDM")
+                </button>
+            }
         </div>
 
         <!-- User Profile -->
@@ -209,7 +296,7 @@
 
     <!-- Main Content -->
     <div class="flex-1 flex flex-col relative">
-        @if (_selectedRoom is not null && _roomPasswords.ContainsKey(_selectedRoom.Id))
+        @if (_selectedRoom is not null && (_roomPasswords.ContainsKey(_selectedRoom.Id) || _selectedRoom.IsDm))
         {
             <ChatView Room="_selectedRoom" RoomPassword="_selectedRoomPassword" />
         }
@@ -240,7 +327,7 @@
         <!-- Status Bar -->
         <div class="flex items-center justify-between px-4 py-1.5 border-t border-[var(--border)] bg-[var(--bg-secondary)]">
             <div class="flex items-center gap-1.5">
-                <span class="w-1.5 h-1.5 rounded-full bg-[var(--success)] shadow-[0_0_4px_var(--success)]" style="@(!Chat.IsTorConnected ? "background: var(--danger); box-shadow: none;" : "")"></span>
+                <span class="w-1.5 h-1.5 rounded-full bg-[var(--success)] glow-success-sm" style="@(!Chat.IsTorConnected ? "background: var(--danger); box-shadow: none;" : "")"></span>
                 <span class="text-[11px] text-[var(--text-muted)]">Tor: @(Chat.IsTorConnected ? "Connected" : "Disconnected")</span>
             </div>
             <div class="flex items-center gap-1.5">
@@ -275,7 +362,7 @@
                 <div class="flex flex-col gap-1.5">
                     <label class="text-[12px] text-[var(--text-secondary)] font-medium">@L("RoomPassword")</label>
                     <input type="password" placeholder="@L("RoomPassword")"
-                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 input-focus-ring"
                            @bind="_unlockPassword" @bind:event="oninput" @onkeydown="HandleUnlockKeyDown" />
                 </div>
                 @if (!string.IsNullOrEmpty(_dialogError))
@@ -302,26 +389,26 @@
                 <div class="flex flex-col gap-1.5">
                     <label class="text-[12px] text-[var(--text-secondary)] font-medium">@L("RoomName")</label>
                     <input type="text" placeholder="e.g. Security Research" maxlength="64"
-                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 input-focus-ring"
                            @bind="_newRoomName" @bind:event="oninput" />
                 </div>
                 <div class="flex flex-col gap-1.5">
                     <label class="text-[12px] text-[var(--text-secondary)] font-medium">@L("RoomDescription") <span class="text-[var(--text-muted)]">(optional)</span></label>
                     <input type="text" placeholder="Brief room description" maxlength="256"
-                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 input-focus-ring"
                            @bind="_newRoomDescription" @bind:event="oninput" />
                 </div>
                 <div class="flex flex-col gap-1.5">
                     <label class="text-[12px] text-[var(--text-secondary)] font-medium">@L("RoomPassword")</label>
                     <input type="password" placeholder="Secure password"
-                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 input-focus-ring"
                            @bind="_newRoomPassword" @bind:event="oninput" />
                     <p class="text-[11px] text-[var(--text-muted)]">@L("SharePasswordHint")</p>
                 </div>
                 <div class="flex flex-col gap-1.5">
                     <label class="text-[12px] text-[var(--text-secondary)] font-medium">@L("MaxCapacity")</label>
                     <input type="number" min="0" placeholder="0 = unlimited"
-                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 input-focus-ring"
                            @bind="_newRoomCapacity" @bind:event="oninput" />
                 </div>
                 @if (!string.IsNullOrEmpty(_dialogError))
@@ -350,7 +437,7 @@
                 <div class="flex flex-col gap-1.5">
                     <label class="text-[12px] text-[var(--text-secondary)] font-medium">@L("RoomIdOrInvite")</label>
                     <input type="text" placeholder="@L("PasteRoomIdOrInvite")"
-                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 input-focus-ring"
                            value="@_joinInput" @oninput="OnJoinInputChanged" />
                     @if (_inviteLinkDetected)
                     {
@@ -365,13 +452,13 @@
                 <div class="flex flex-col gap-1.5">
                     <label class="text-[12px] text-[var(--text-secondary)] font-medium">@L("RoomNameOptional") <span class="text-[var(--text-muted)]">(optional)</span></label>
                     <input type="text" placeholder="@L("RoomNameOptionalPlaceholder")"
-                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 input-focus-ring"
                            @bind="_joinRoomName" @bind:event="oninput" />
                 </div>
                 <div class="flex flex-col gap-1.5">
                     <label class="text-[12px] text-[var(--text-secondary)] font-medium">@L("RoomPassword")</label>
                     <input type="password" placeholder="@L("RoomSharedPassword")"
-                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 input-focus-ring"
                            @bind="_joinRoomPassword" @bind:event="oninput" />
                 </div>
                 @if (!string.IsNullOrEmpty(_dialogError))
@@ -408,6 +495,56 @@
     </div>
 }
 
+<!-- New DM Dialog -->
+@if (_showNewDm)
+{
+    <div class="modal-overlay" @onclick="CloseDialogs">
+        <div class="modal-backdrop"></div>
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <h2 class="text-[18px] font-semibold mb-4 text-[var(--text-primary)]">@L("NewDM")</h2>
+
+            <!-- Your DM Token -->
+            <div class="flex flex-col gap-1.5 mb-4 p-3 rounded-[var(--radius-md)] bg-[var(--bg-tertiary)] border border-[var(--border)]">
+                <label class="text-[12px] text-[var(--text-secondary)] font-medium">@L("DmToken")</label>
+                <p class="text-[11px] text-[var(--text-muted)]">@L("DmTokenDesc")</p>
+                <div class="flex items-center gap-2 mt-1">
+                    <code class="flex-1 text-[11px] font-mono text-[var(--text-secondary)] bg-[var(--bg-primary)] px-2 py-1.5 rounded-[var(--radius-sm)] truncate select-text">@(Chat.GetDmToken() ?? "Tor not connected")</code>
+                    <button class="px-3 py-1.5 rounded-[var(--radius-sm)] text-[11px] font-semibold cursor-pointer transition-colors duration-200 border border-[var(--border-light)] bg-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                            @onclick="CopyDmToken">@(_dmTokenCopied ? L("Copied") : L("CopyToken"))</button>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-3">
+                <div class="flex flex-col gap-1.5">
+                    <label class="text-[12px] text-[var(--text-secondary)] font-medium">@L("DmToken")</label>
+                    <input type="text" placeholder="@L("PasteDmToken")"
+                           class="w-full h-10 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 input-focus-ring"
+                           value="@_dmTokenInput" @oninput="OnDmTokenInputChanged" />
+                    @if (_dmTokenDetected)
+                    {
+                        <div class="flex items-center gap-1.5 mt-0.5" style="animation: fadeIn 200ms ease;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            <span class="text-[11px] text-[var(--success)]">@L("DmTokenDetected")</span>
+                        </div>
+                    }
+                </div>
+                @if (!string.IsNullOrEmpty(_dialogError))
+                {
+                    <p class="text-[12px] text-[var(--danger)]">@_dialogError</p>
+                }
+                <button class="w-full h-10 mt-2 rounded-[var(--radius-md)] bg-[var(--accent)] text-[#fff] text-[14px] font-semibold cursor-pointer transition-colors duration-200 hover:bg-[var(--accent-light)] active:bg-[var(--accent-dark)] border-none"
+                        @onclick="StartDirectMessage" disabled="@_dialogLoading">
+                    @(_dialogLoading ? "Connecting..." : L("StartDirectMessage"))
+                </button>
+                <button class="w-full h-9 rounded-[var(--radius-md)] border border-[var(--border-light)] bg-transparent text-[var(--text-secondary)] text-[13px] cursor-pointer transition-colors duration-200 hover:bg-[var(--bg-hover)]"
+                        @onclick="CloseDialogs">@L("Cancel")</button>
+            </div>
+        </div>
+    </div>
+}
+
 <!-- Settings Dialog -->
 @if (_showSettings)
 {
@@ -434,12 +571,21 @@
                     <div class="flex flex-col gap-1.5">
                         <label class="text-[12px] text-[var(--text-secondary)]">@L("DisplayName")</label>
                         <input type="text" maxlength="32"
-                               class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                               class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 input-focus-ring"
                                @bind="_settingsDisplayName" @bind:event="oninput" />
                     </div>
                     <div class="flex flex-col gap-1.5">
                         <label class="text-[12px] text-[var(--text-secondary)]">@L("YourFingerprint")</label>
                         <p class="text-[12px] font-mono text-[var(--text-secondary)] select-text bg-[var(--bg-tertiary)] px-3 py-2 rounded-[var(--radius-sm)]">@Chat.UserFingerprint</p>
+                    </div>
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-[12px] text-[var(--text-secondary)]">@L("DmToken")</label>
+                        <p class="text-[11px] text-[var(--text-muted)] mb-1">@L("DmTokenDesc")</p>
+                        <div class="flex items-center gap-2">
+                            <p class="flex-1 text-[12px] font-mono text-[var(--text-secondary)] select-text bg-[var(--bg-tertiary)] px-3 py-2 rounded-[var(--radius-sm)] truncate">@(Chat.GetDmToken() ?? "Tor not connected")</p>
+                            <button class="px-3 py-1.5 rounded-[var(--radius-sm)] text-[11px] font-semibold cursor-pointer transition-colors duration-200 border border-[var(--border-light)] bg-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+                                    @onclick="CopyDmToken">@(_dmTokenCopied ? L("Copied") : L("CopyToken"))</button>
+                        </div>
                     </div>
                     <div class="flex flex-col gap-1.5">
                         <label class="text-[12px] text-[var(--text-secondary)]">@L("PublicKey")</label>
@@ -450,7 +596,7 @@
                 <!-- LANGUAGE -->
                 <h3 class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mt-6 mb-3">@L("Language")</h3>
                 <div class="relative">
-                    <select class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)] appearance-none cursor-pointer"
+                    <select class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] outline-none transition-all duration-200 input-focus-ring appearance-none cursor-pointer"
                             @onchange="OnLanguageChanged" value="@_settingsLanguage">
                         <option value="en">English</option>
                         <option value="tr">Turkce</option>
@@ -514,7 +660,7 @@
                 <div class="mt-3 flex flex-col gap-2">
                     <label class="text-[12px] text-[var(--text-secondary)]">@L("TorBridge")</label>
                     <input type="text" placeholder="Bridge line"
-                           class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 input-focus-ring"
                            @bind="_secBridgeLine" />
                     <div class="flex items-center gap-2">
                         @{ var transports = new[] { "obfs4", "meek", "snowflake" }; }
@@ -530,7 +676,7 @@
                 <div class="mt-3 flex flex-col gap-1.5">
                     <label class="text-[12px] text-[var(--text-secondary)]">@L("GuardPinning")</label>
                     <input type="text" placeholder="Fingerprints"
-                           class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                           class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 input-focus-ring"
                            @bind="_secGuardNodes" />
                 </div>
 
@@ -599,7 +745,7 @@
                 <!-- AUTO-LOCK -->
                 <h3 class="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mt-6 mb-3">@L("AutoLock")</h3>
                 <div class="relative">
-                    <select class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)] appearance-none cursor-pointer"
+                    <select class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] outline-none transition-all duration-200 input-focus-ring appearance-none cursor-pointer"
                             @bind="_settingsAutoLock">
                         <option value="0">@L("Never")</option>
                         <option value="1">1 minute</option>
@@ -638,13 +784,13 @@
                         <div class="flex flex-col gap-1.5">
                             <label class="text-[12px] text-[var(--text-secondary)]">@L("CurrentPassword")</label>
                             <input type="password"
-                                   class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                                   class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 input-focus-ring"
                                    @bind="_pwdCurrent" @bind:event="oninput" />
                         </div>
                         <div class="flex flex-col gap-1.5">
                             <label class="text-[12px] text-[var(--text-secondary)]">@L("NewPassword")</label>
                             <input type="password"
-                                   class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                                   class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 input-focus-ring"
                                    @bind="_pwdNew" @bind:event="oninput" />
                             @if (!string.IsNullOrEmpty(_pwdNew))
                             {
@@ -661,7 +807,7 @@
                         <div class="flex flex-col gap-1.5">
                             <label class="text-[12px] text-[var(--text-secondary)]">@L("ConfirmNewPassword")</label>
                             <input type="password"
-                                   class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-glow)]"
+                                   class="w-full h-9 px-3 text-[13px] rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-tertiary)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all duration-200 input-focus-ring"
                                    @bind="_pwdConfirm" @bind:event="oninput" />
                             @if (!string.IsNullOrEmpty(_pwdConfirm))
                             {
@@ -773,12 +919,16 @@
     private string _selectedRoomId = string.Empty;
     private string _selectedRoomPassword = string.Empty;
 
+    // Sidebar tab
+    private string _sidebarTab = "rooms";
+
     // Dialog state
     private bool _showCreateRoom;
     private bool _showJoinRoom;
     private bool _showRoomPassword;
     private bool _showDeleteConfirm;
     private bool _showSettings;
+    private bool _showNewDm;
     private string _newRoomName = string.Empty;
     private string _newRoomPassword = string.Empty;
     private string _newRoomDescription = string.Empty;
@@ -843,6 +993,13 @@
     private bool _panicLoading;
     private bool _panicWiping;
 
+    // DM
+    private string _dmTokenInput = string.Empty;
+    private string _dmPeerOnion = string.Empty;
+    private string _dmPeerFingerprint = string.Empty;
+    private bool _dmTokenDetected;
+    private bool _dmTokenCopied;
+
     // Tor
     private bool _torConnecting;
     private string? _torError;
@@ -887,13 +1044,18 @@
         {
             await Chat.StartTorAsync();
 
+            // Subscribe to peer status changes to refresh UI
+            Chat.OnPeerStatusChanged += OnPeerStatusChanged;
+            Chat.OnConnectionFailed += OnConnectionFailed;
+            Chat.OnDmAccepted += OnDmAccepted;
+
             // Auto-reconnect to rooms with known onion addresses
             _ = ReconnectToRoomPeersAsync();
         }
         catch (Exception ex)
         {
-            _torError = ex.Message;
-            System.Diagnostics.Debug.WriteLine($"Auto Tor connection failed: {ex.Message}");
+            _torError = $"{ex.Message} (Check logs for details)";
+            Console.WriteLine($"[Tor Error] {ex}");
         }
         finally
         {
@@ -902,20 +1064,67 @@
         }
     }
 
+    private void OnPeerStatusChanged(string fingerprint, bool connected)
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OnConnectionFailed(string roomId, string errorMessage)
+    {
+        _ = InvokeAsync(() =>
+        {
+            _torError = errorMessage;
+            StateHasChanged();
+        });
+    }
+
+    private void OnDmAccepted(ChatRoom dm)
+    {
+        _ = InvokeAsync(() =>
+        {
+            // Add the new DM room to the rooms list if not already there
+            if (!_rooms.Any(r => r.Id == dm.Id))
+            {
+                _rooms.Insert(0, dm);
+            }
+            // Switch to DMs tab to make it visible
+            _sidebarTab = "dms";
+            StateHasChanged();
+        });
+    }
+
     private async Task ReconnectToRoomPeersAsync()
     {
+        // Unlock all rooms we have passwords for + DM rooms
         foreach (var room in _rooms)
         {
-            if (!string.IsNullOrEmpty(room.OnionAddress) && _roomPasswords.ContainsKey(room.Id))
+            if (room.IsDm)
+            {
+                // DM rooms unlock without password
+                Chat.UnlockDmRoom(room.Id);
+            }
+            else if (_roomPasswords.TryGetValue(room.Id, out var pwd))
+            {
+                Chat.UnlockRoom(room.Id, pwd, room.RoomSalt);
+            }
+
+            // Connect to rooms with a stored peer onion address
+            if (!string.IsNullOrEmpty(room.OnionAddress))
             {
                 try
                 {
-                    Chat.UnlockRoom(room.Id, _roomPasswords[room.Id], room.RoomSalt);
                     await Chat.ConnectToRoomPeerAsync(room.Id, room.OnionAddress);
                 }
-                catch { /* best effort */ }
+                catch { /* best effort — retry timer will handle it */ }
             }
         }
+
+        // Also try reconnecting via in-memory known peer addresses (covers creator rooms)
+        try
+        {
+            await Chat.TryReconnectPeersAsync();
+        }
+        catch { /* best effort */ }
     }
 
     // ──────── Room Selection ────────
@@ -951,23 +1160,38 @@
             await UnlockRoom();
     }
 
-    private Task UnlockRoom()
+    private async Task UnlockRoom()
     {
         _dialogError = string.Empty;
 
         if (string.IsNullOrWhiteSpace(_unlockPassword))
         {
             _dialogError = "Password is required.";
-            return Task.CompletedTask;
+            return;
         }
 
-        if (_unlockRoomTarget is null) return Task.CompletedTask;
+        if (_unlockRoomTarget is null) return;
+
+        // Derive key and try to load messages to verify password
+        Chat.UnlockRoom(_unlockRoomTarget.Id, _unlockPassword, _unlockRoomTarget.RoomSalt);
+        try
+        {
+            await Chat.GetMessagesAsync(_unlockRoomTarget.Id, limit: 1);
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            _dialogError = "Wrong password. Cannot decrypt room messages.";
+            return;
+        }
+        catch
+        {
+            // No messages yet or other non-crypto error — password might be correct for a new room
+        }
 
         _roomPasswords[_unlockRoomTarget.Id] = _unlockPassword;
         ActivateRoom(_unlockRoomTarget, _unlockPassword);
         _showRoomPassword = false;
         _unlockRoomTarget = null;
-        return Task.CompletedTask;
     }
 
     // ──────── Room Context Menu ────────
@@ -1062,6 +1286,7 @@
         _showRoomPassword = false;
         _showDeleteConfirm = false;
         _showSettings = false;
+        _showNewDm = false;
         _dialogError = string.Empty;
         _settingsError = string.Empty;
         _settingsSuccess = string.Empty;
@@ -1072,6 +1297,11 @@
         _pwdCurrent = string.Empty;
         _pwdNew = string.Empty;
         _pwdConfirm = string.Empty;
+        _dmTokenInput = string.Empty;
+        _dmPeerOnion = string.Empty;
+        _dmPeerFingerprint = string.Empty;
+        _dmTokenDetected = false;
+        _dmTokenCopied = false;
     }
 
     // ──────── Create / Join ────────
@@ -1158,19 +1388,36 @@
             {
                 room.OnionAddress = onionAddr;
                 await Chat.UpdateRoomAsync(room);
-                // Connect to room host in background
-                _ = Chat.ConnectToRoomPeerAsync(room.Id, onionAddr);
             }
 
             _rooms.Insert(0, room);
             _roomPasswords[room.Id] = _joinRoomPassword;
             ActivateRoom(room, _joinRoomPassword);
             _showJoinRoom = false;
+
+            // Connect to room host in background (with retry)
+            if (onionAddr is not null)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Chat.ConnectToRoomPeerAsync(room.Id, onionAddr);
+                    }
+                    catch (Exception ex)
+                    {
+                        await InvokeAsync(() =>
+                        {
+                            _torError = $"Peer connection failed: {ex.Message}";
+                            StateHasChanged();
+                        });
+                    }
+                });
+            }
         }
-        catch
+        catch (Exception ex)
         {
-            // Silent fail — wrong password or error, just close dialog
-            _showJoinRoom = false;
+            _dialogError = $"Failed to join room: {ex.Message}";
         }
         finally
         {
@@ -1429,7 +1676,7 @@
             {
                 _joinRoomId = parts[0];
                 _joinInviteToken = parts.Length >= 2 ? parts[1] : string.Empty;
-                _joinOnionAddress = parts.Length >= 3 ? parts[2] : string.Empty;
+                _joinOnionAddress = (parts.Length >= 3 ? parts[2] : string.Empty).Trim();
                 _inviteLinkDetected = true;
                 return;
             }
@@ -1440,6 +1687,124 @@
         _joinRoomId = string.Empty;
         _joinInviteToken = string.Empty;
         _joinOnionAddress = string.Empty;
+    }
+
+    // ──────── Direct Messages ────────
+
+    private void ShowNewDmDialog()
+    {
+        CloseDialogs();
+        _showNewDm = true;
+        _dialogError = string.Empty;
+        _dmTokenInput = string.Empty;
+        _dmPeerOnion = string.Empty;
+        _dmPeerFingerprint = string.Empty;
+        _dmTokenDetected = false;
+        _dmTokenCopied = false;
+    }
+
+    private void OnDmTokenInputChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? string.Empty;
+        _dmTokenInput = value;
+
+        var parsed = ChatService.ParseDmToken(value);
+        if (parsed.HasValue)
+        {
+            _dmPeerOnion = parsed.Value.onionAddress;
+            _dmPeerFingerprint = parsed.Value.fingerprint;
+            _dmTokenDetected = true;
+        }
+        else
+        {
+            _dmTokenDetected = false;
+            _dmPeerOnion = string.Empty;
+            _dmPeerFingerprint = string.Empty;
+        }
+    }
+
+    private async Task StartDirectMessage()
+    {
+        _dialogError = string.Empty;
+
+        if (!_dmTokenDetected || string.IsNullOrEmpty(_dmPeerOnion) || string.IsNullOrEmpty(_dmPeerFingerprint))
+        {
+            _dialogError = L("InvalidDmToken");
+            return;
+        }
+
+        if (_dmPeerFingerprint == Chat.UserFingerprint)
+        {
+            _dialogError = L("CannotDmSelf");
+            return;
+        }
+
+        _dialogLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var dm = await Chat.CreateDirectMessageAsync(_dmPeerOnion, _dmPeerFingerprint);
+
+            // Add to room list if not already there
+            if (!_rooms.Any(r => r.Id == dm.Id))
+            {
+                _rooms.Insert(0, dm);
+            }
+
+            // Switch to DMs tab and select
+            _sidebarTab = "dms";
+            SelectDm(dm);
+            _showNewDm = false;
+
+            // Connect to peer in background
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Chat.ConnectToRoomPeerAsync(dm.Id, _dmPeerOnion);
+                    await InvokeAsync(StateHasChanged);
+                }
+                catch { /* retry timer will handle it */ }
+            });
+        }
+        catch (Exception ex)
+        {
+            _dialogError = $"Failed: {ex.Message}";
+        }
+        finally
+        {
+            _dialogLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void SelectDm(ChatRoom dm)
+    {
+        Chat.ResetActivityTimer();
+        Chat.UnlockDmRoom(dm.Id);
+        _selectedRoom = dm;
+        _selectedRoomId = dm.Id;
+        _selectedRoomPassword = ""; // DMs don't use password
+        StateHasChanged();
+    }
+
+    private async Task CopyDmToken()
+    {
+        var token = Chat.GetDmToken();
+        if (token is not null)
+        {
+            try
+            {
+                await Platform.CopyToClipboardAsync(token);
+                _dmTokenCopied = true;
+                StateHasChanged();
+                await Task.Delay(2000);
+                _dmTokenCopied = false;
+                StateHasChanged();
+            }
+            catch { /* clipboard not available */ }
+        }
     }
 
     // ──────── Panic Wipe ────────
@@ -1464,5 +1829,15 @@
             _settingsError = $"Wipe failed: {ex.Message}";
             StateHasChanged();
         }
+    }
+
+    // ──────── Cleanup ────────
+
+    public void Dispose()
+    {
+        Updater.OnStateChanged -= OnUpdaterStateChanged;
+        Chat.OnPeerStatusChanged -= OnPeerStatusChanged;
+        Chat.OnConnectionFailed -= OnConnectionFailed;
+        Chat.OnDmAccepted -= OnDmAccepted;
     }
 }

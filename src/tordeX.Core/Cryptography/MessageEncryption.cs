@@ -75,8 +75,16 @@ public static class MessageEncryption
     public static string EncryptString(string message, byte[] key, byte[]? associatedData = null)
     {
         var plaintext = Encoding.UTF8.GetBytes(message);
-        var encrypted = Encrypt(plaintext, key, associatedData);
-        return Convert.ToBase64String(encrypted);
+        try
+        {
+            var encrypted = Encrypt(plaintext, key, associatedData);
+            return Convert.ToBase64String(encrypted);
+        }
+        finally
+        {
+            // SECURITY FIX: CWE-316 — zero plaintext bytes after encryption
+            CryptographicOperations.ZeroMemory(plaintext);
+        }
     }
 
     /// <summary>
@@ -86,7 +94,14 @@ public static class MessageEncryption
     {
         var encrypted = Convert.FromBase64String(encryptedBase64);
         var decrypted = Decrypt(encrypted, key, associatedData);
-        return Encoding.UTF8.GetString(decrypted);
+        try
+        {
+            return Encoding.UTF8.GetString(decrypted);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(decrypted);
+        }
     }
 
     /// <summary>

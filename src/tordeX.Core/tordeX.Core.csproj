@@ -21,9 +21,21 @@
     <!-- Binary serialization (compact, fast) -->
     <PackageReference Include="MessagePack" Version="3.1.3" />
 
-    <!-- Tor SOCKS5 proxy support -->
-    <PackageReference Include="Knapcode.TorSharp" Version="2.15.0" />
+    <!-- Tor: managed directly via Process (no TorSharp dependency) -->
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.0.0" />
+  </ItemGroup>
+
+  <!-- Embedded Tor binary - copied to output directory -->
+  <ItemGroup>
+    <Content Include="tor.exe" Condition="Exists('tor.exe')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <!-- Also copy from Resources folder if present -->
+    <Content Include="Resources\**\*" Condition="Exists('Resources')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

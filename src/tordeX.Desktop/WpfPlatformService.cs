@@ -24,4 +24,13 @@ public sealed class WpfPlatformService : IPlatformService
             Application.Current.Shutdown();
         });
     }
+
+    public Task CopyToClipboardAsync(string text)
+    {
+        Application.Current?.Dispatcher.Invoke(() =>
+        {
+            Clipboard.SetText(text);
+        });
+        return Task.CompletedTask;
+    }
 }
